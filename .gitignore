@@ -1,0 +1,6 @@
+/agent-motion
+/dist/
+/.cache/
+coverage.out
+.DS_Store
+.env*
