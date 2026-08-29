@@ -1,72 +1,106 @@
 # agent-motion
 
-`agent-motion` creates a temporal projection: one spatially aligned PNG that
-encodes which pixels changed over a selected video interval, plus JSON that
-explains the encoding to an LLM or agent.
+Find out what happens in a video over time, without watching it.
 
-It is aimed at fixed-viewport recordings such as UI captures, visual tests,
-browser behaviour, rendering, and game debugging. It does not reconstruct a
-video and should not be treated as a general video summary.
+`agent-motion` decodes a recording locally and returns a described timeline:
+what changed, when, where on screen, and what shape the change had. It writes
+images when you need to see something, and it tells you what it could not have
+seen.
 
-> **Status:** early prototype. The first deterministic frame-difference mode
-> is implemented; optical flow, camera stabilization, and the LLM evaluation
-> harness are intentionally future work. The design record lives in
-> [`design-docs/`](design-docs/).
+Built for AI agents, useful at a terminal.
+
+```console
+$ agent-motion timeline recording.mp4
+```
+
+```text
+Analysed 0.00s to 27.97s. Found 2 hard cuts, 1 movement, 1 one-off change that
+persists, 1 repeated toggle, 1 whole-frame flash and 1 gradual change. The
+busiest moment is 15.00s.
+
+motion   2.00-5.00   Movement from 2.00s to 5.00s in the middle centre; the
+                     active area travels left to right across about 454 px.
+step     6.50        One-off change at 6.50s in the bottom right (60x24 px at
+                     500,300) that is still there afterwards.
+flicker  9.00-11.90  Repeated toggling in the top centre, about 10.3 changes
+                     per second over 2.90s.
+cut      15.00       Hard cut: 100% of the frame changes in one transition.
+flash    21.00       Whole-frame flash lasting about 30 ms.
+gradual  22.47-27.60 Gradual change in the bottom centre. Too slow to clear the
+                     threshold between adjacent frames.
+```
 
 ## Why
 
-Video debugging often has a mostly static screen. A frame atlas repeats those
-static pixels over and over. A temporal projection keeps the original `x,y`
-coordinates and concentrates its image budget on where and when pixels change,
-giving an image-capable agent a compact starting point for temporal zoom.
+Sampling frames into an atlas spends most of its budget re-reading a static
+screen, and loses whatever happened between two samples. The question is
+usually temporal — *when did this break, and where?* — and that answer is
+mostly text, at a fraction of the cost of the frames it summarises.
 
-## Requirements
+## Install
 
-- Go 1.26+
-- `ffmpeg` and `ffprobe` on `PATH` (or pass `--ffmpeg` / `--ffprobe`)
+```sh
+brew install shhac/tap/agent-motion
+```
 
-## Build and run
+Or build it:
 
 ```sh
 make build
-./agent-motion project recording.mp4 --start 12 --end 18
 ```
 
-This writes `recording.temporal.png` beside the input and prints metadata such
-as frame count, source FPS, change coverage, peak activity time, and the exact
-RGB-channel meaning. Choose another path with `--output`.
+Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
+`--ffprobe`).
+
+## Commands
+
+| Command | Cost | What you get |
+|---|---|---|
+| `inspect` | none | Dimensions, frame rate, duration, codec. No decoding. |
+| `timeline` | one pass | The described timeline. Start here. |
+| `sheet` | one pass + stills | One PNG of many labelled real frames. |
+| `project` | one full-res pass | The timeline plus an activity-map PNG. |
+| `frames` | one still each | Real source frames at chosen timestamps. |
+
+Every result carries `next_steps` with commands you can run verbatim, and
+`limits` with what that run could not have seen.
 
 ```sh
-agent-motion project recording.mp4 --start 17 --end 19 --threshold 12 \
-  --output /tmp/recording-17-19.png
+agent-motion sheet recording.mp4                       # see the whole thing
+agent-motion timeline recording.mp4 --start 17 --end 19 --threshold 4
+agent-motion frames recording.mp4 --at 17.62
 ```
 
-Use progressively smaller intervals to investigate suspicious activity:
+## What it is good at, and what it is not
 
-```text
-0–30s projection → 17–19s projection → 17.5–17.9s projection → frames
-```
+Good at **fixed-viewport** recordings: screen captures, browser sessions,
+visual regression runs, rendering and game debugging. It finds where and when
+pixels changed, including changes far too slow to see between adjacent frames.
 
-Run `agent-motion usage` or `agent-motion project usage` for the agent-facing
-contract.
+It does not recognise objects, read text, or explain why anything changed.
+Regions are bounding boxes of change, not outlines. A handheld or panning
+camera makes everything change at once, and the results become much weaker.
 
-## v1 encoding
+## The activity image
 
-For each pixel, v1 compares successive RGB frames and suppresses changes below
-`--threshold`.
-
-- **red** — accumulated change magnitude, normalized within this projection
-- **green** — mean time of detected change (early → dark, late → bright)
-- **blue** — change frequency, with extra emphasis for sign reversals
-
-Black means no detected activity. This is an activity map, not a faithful
-rendering of the source frame. See the metadata rather than assuming channel
-semantics.
+`project` writes a PNG in which every pixel keeps its source `x,y`: red is how
+much it changed, green is when (black early, bright late), blue is how often.
+Black is no change. It is an activity map, not a picture of the video — the
+exact encoding comes back in the result, and you should read it rather than
+infer it from the colours.
 
 ## Development
 
 ```sh
-make test
+make test    # runs with no FFmpeg and no media, against a synthetic scenario
 make vet
 make lint
+make fixture # renders the reference video used for evaluation
 ```
+
+The design record is in [`design-docs/`](design-docs/), including a
+[decision log](design-docs/decisions.md) of what was changed and what forced it.
+
+## Licence
+
+[PolyForm Perimeter 1.0.0](LICENSE).

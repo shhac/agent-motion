@@ -1,24 +1,37 @@
 # agent-motion
 
-Temporal-projection CLI for AI agents. Go + Cobra.
+Tells an agent what happens in a video over time. Go + Cobra.
+
+## What this tool is
+
+The primary output is a **described timeline** — events with kinds, timestamps
+and regions — not an image. Images (`sheet`, `project`) support that answer;
+they are not the product. See `design-docs/vision.md`.
 
 ## Project rules
 
-- The binary is `agent-motion`; the primary command is `project <video>`.
+- The binary is `agent-motion`. `timeline` is the primary command; `project` is
+  `timeline` plus the activity-map image.
 - Single resources default to pretty JSON. Any future list command defaults to
   NDJSON. `--format json|yaml|jsonl` overrides either default.
 - Every failure is one JSON object on stderr with `fixable_by`
   (`agent` | `human` | `retry`) and an actionable `hint` where possible.
-- Never treat a temporal projection as video reconstruction or a source of
-  ground truth. Its encoding is lossy and must be returned in metadata.
-- Decoding is delegated to a locally installed FFmpeg/FFprobe. Do not add a
-  network service or a heavyweight ML dependency to v1.
-- Preserve pixel coordinates. Do not resize, crop, stabilise, or register
-  frames unless a command explicitly requests it and the metadata records it.
-- The first mode must remain deterministic for the same decoder version,
-  input, flags, and pixel format.
-- Keep FFmpeg process execution behind a small package boundary; accumulator
-  tests must run without a video file or an installed decoder.
+- Every analysis result must carry `limits` and `next_steps`. A caller must
+  never be able to read "no events" as "nothing happened".
+- Event kinds name the *shape* of a change, never its meaning. Do not add a
+  kind that asserts what something is.
+- Never present an activity image as a reconstruction or as ground truth. Its
+  encoding is lossy and is returned in `encoding`.
+- Preserve pixel coordinates. Do not resize, crop, stabilise or register frames
+  unless a command explicitly requests it and the result records it. The
+  projection legend is appended *below* the frame for this reason.
+- Decoding is delegated to a locally installed FFmpeg/FFprobe. No network
+  service and no heavyweight ML dependency.
+- All process execution stays inside `internal/video`. `internal/motion` and
+  `internal/render` must remain pure, and the test suite must keep running with
+  no FFmpeg installed and no media on disk.
+- Analysis is deterministic for the same decoder version, input, flags and
+  pixel format.
 
 ## Verification
 
@@ -28,20 +41,26 @@ GOCACHE=$(pwd)/.cache/go-build go vet ./...
 golangci-lint run ./...
 ```
 
+`make fixture` renders the reference video used for evaluation. It is the only
+thing here that needs FFmpeg.
+
 ## Keeping docs in sync
 
-When a command, flag, projection channel, output field, or transform changes,
-update all of these in the same change:
+When a command, flag, event kind, output field or transform changes, update all
+of these in the same change:
 
 - `internal/cli/usage_text.go`
-- the matching `skills/agent-motion/references/commands/*.md` file
-- `skills/agent-motion/SKILL.md` when routing or the core contract changes
+- `skills/agent-motion/SKILL.md` and `skills/agent-motion/references/*.md`
 - `design-docs/cli-design.md` and `design-docs/behavior-reference.md`
+- `design-docs/decisions.md` when the change was forced by something learned
 - `README.md` for user-facing changes
 
 ## Design references
 
-- `design-docs/initial-design.md` — problem statement, hypothesis, and scope
-- `design-docs/architecture.md` — package and process boundaries
+- `design-docs/vision.md` — the problem, the goal, and the scope
+- `design-docs/architecture.md` — packages, the decoder seam, memory
 - `design-docs/cli-design.md` — command and output contract
-- `design-docs/behavior-reference.md` — decoder and projection semantics
+- `design-docs/behavior-reference.md` — detection and image semantics
+- `design-docs/evaluation.md` — the reference scenario and how it is scored
+- `design-docs/decisions.md` — what changed and what forced it
+- `design-docs/archived/` — superseded documents, kept for the reasoning

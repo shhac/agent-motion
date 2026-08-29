@@ -9,6 +9,15 @@ build:
 test:
 	GOCACHE=$(GOCACHE) go test ./... -count=1
 
+test-short:
+	GOCACHE=$(GOCACHE) go test ./... -count=1 -short
+
+# Renders the reference scenario used for evaluation. Needs FFmpeg.
+fixture:
+	@mkdir -p .cache/eval
+	GOCACHE=$(GOCACHE) go run ./tools/genfixture \
+		-video .cache/eval/reference.mp4 -truth .cache/eval/reference-truth.json
+
 vet:
 	GOCACHE=$(GOCACHE) go vet ./...
 
@@ -25,4 +34,4 @@ clean:
 	rm -f $(BINARY)
 	rm -rf dist/
 
-.PHONY: build test vet lint fmt dev clean
+.PHONY: build test test-short fixture vet lint fmt dev clean

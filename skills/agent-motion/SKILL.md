@@ -1,45 +1,121 @@
-# agent-motion
+---
+name: agent-motion
+description: |
+  Find out what happens in a video over time without watching it. Use when:
+  - Debugging a screen recording, UI capture, browser session, or visual test
+  - Locating when something appeared, moved, flickered, flashed, or faded
+  - Finding the timestamp of a glitch, a rendering artefact, or a layout jump
+  - Deciding which frames of a video are worth looking at, before looking
+  - Summarising a recording you cannot afford to sample frame by frame
+  Triggers: "video", "screen recording", "screencast", "mp4", "mov", "webm", "what happens in this video", "when does", "find the glitch", "flicker", "flashing", "visual regression", "ui recording", "capture", "frame", "timestamp of", "contact sheet", "extract frames", "motion", "agent-motion", "temporal"
+allowed-tools: Bash(agent-motion *) Read Grep Glob
+---
 
-Use `agent-motion` to create a deterministic temporal projection for a fixed-
-viewport video when an image-capable agent needs to locate visual activity
-without consuming a large atlas of frames.
+# Understanding a video with `agent-motion`
 
-## Core path
+`agent-motion` is a CLI on `$PATH`. It answers **what changed, when, and where**
+for a video, as JSON you can act on, and it writes images when you need to see
+something. It never uploads anything; decoding is local FFmpeg.
+
+It is built for **fixed-viewport** recordings — a screen capture, a browser
+session, a visual test, a rendered scene. A handheld or panning camera makes
+every pixel change at once, and the results become much weaker.
+
+## Start here
 
 ```sh
-agent-motion project recording.mp4 --start 0 --end 30
+agent-motion timeline recording.mp4
 ```
 
-The command writes a PNG and prints one JSON object. Read `output`,
-`motion_coverage`, `peak_activity_time_seconds`, and especially `encoding`
-before interpreting the image. v1 RGB does **not** represent source colour.
+Read the fields in this order:
 
-For a suspicious time range, recurse with a smaller interval:
+1. `narrative` — one paragraph describing the whole interval.
+2. `events` — each with `kind`, `start_seconds`, `end_seconds`, `region_xyxy`,
+   `position`, and a plain-English `summary`.
+3. `limits` — what this run could not have seen. Read it before concluding
+   that nothing happened.
+4. `next_steps` — commands you can run verbatim.
+
+`activity_sparkline` shows the shape of the interval at a glance; its scale is
+relative to `activity_sparkline_full_scale`, so it is for orientation, not
+measurement.
+
+## Then see it
 
 ```sh
-agent-motion project recording.mp4 --start 17 --end 19
-agent-motion project recording.mp4 --start 17.5 --end 17.9
+agent-motion sheet recording.mp4
 ```
 
-Use original frames only after narrowing the interval enough to need them.
+Writes one PNG containing many real frames, each captioned with its timestamp
+and the event it belongs to, choosing the moments from the analysis. Open it
+with the Read tool. This is usually the fastest way to learn what a recording
+is actually of.
 
-## Preconditions and limits
+For specific moments, `--at` takes over and skips the analysis:
 
-- Best for stationary-camera/viewport footage: UI captures, rendering, visual
-  tests, browser behaviour, and game debugging.
-- The first mode detects frame differences. It does not provide optical flow,
-  camera stabilization, object identity, or video reconstruction.
-- `--threshold` (default 12) suppresses small RGB deltas. Lower it for subtle
-  jitter; raise it when compression noise overwhelms the map.
-- `ffmpeg` and `ffprobe` must be installed. Pass `--ffmpeg` / `--ffprobe` to
-  specify paths.
+```sh
+agent-motion sheet recording.mp4 --at 3.4,7.1,12.0
+agent-motion frames recording.mp4 --at 17.62      # full-size stills
+```
+
+## Narrow in
+
+Events give you a range; run again inside it with a lower threshold to see what
+was too small or too subtle the first time.
+
+```sh
+agent-motion timeline recording.mp4 --start 17 --end 19 --threshold 4
+```
+
+`--threshold` is the main dial. It is the per-pixel change, 0..255, that is
+ignored. The default 12 suppresses compression noise and also hides genuinely
+subtle rendering instability, so lowering it is the standard second move.
+
+## Event kinds
+
+| Kind | Means |
+|---|---|
+| `cut` | most of the frame changed at once and stayed changed |
+| `flash` | most of the frame changed for a frame or two, then returned |
+| `step` | brief localised change that is still there afterwards |
+| `blip` | brief localised change that reverted |
+| `flicker` | one area toggling repeatedly; `changes_per_second` is reported |
+| `motion` | activity whose centre travels; `direction` and `travel_pixels` reported |
+| `gradual` | too slow to see between frames; found over the `--drift` window |
+| `busy` | sustained activity with no clearer shape |
+
+Kinds describe the **shape** of a change, never its meaning. A `step` might be a
+button appearing, a tooltip closing, or a value updating — pull the frames.
+
+## The activity image
+
+```sh
+agent-motion project recording.mp4
+```
+
+Returns everything `timeline` returns and additionally writes a PNG where every
+pixel keeps its source `x,y`: red is how much it changed, green is when (black
+early, bright late), blue is how often. Black is no change above the threshold.
+
+It is an activity map, not a picture of the video. Whole-frame cuts are left out
+of it (they are listed in `transitions_excluded_from_image`) and `gradual`
+events never appear in it. Use `sheet` when you want to know what something
+looks like, and `project` when you want to know where on screen the action was.
+
+## Limits worth stating back
+
+- No object recognition, no text reading, no explanation of cause.
+- Regions are bounding boxes of change, not object outlines.
+- Analysis is downscaled to `--analysis-width` (320 by default) unless you pass
+  `--native`; thin features can be missed.
+- A moving camera or a scrolling page makes almost everything an event.
 
 ## Output and errors
 
-Single result → JSON by default. `--format json|yaml|jsonl` overrides it.
-Failures are JSON on stderr with `fixable_by`: `agent` means correct input,
-`human` means a local dependency/output permission needs attention, and `retry`
-means retry later.
+One JSON object on stdout; `--format json|yaml|jsonl` overrides it. Failures are
+one JSON object on stderr with `fixable_by`: `agent` means fix the input or
+flags, `human` means install or grant something (FFmpeg must be on `PATH`, or
+pass `--ffmpeg` / `--ffprobe`), `retry` means try again.
 
-Read [the project command reference](references/commands/project.md) for the
-full flag and channel contract.
+Full flag and field reference: [commands](references/commands.md) and
+[interpreting results](references/interpreting.md).
