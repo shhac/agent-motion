@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
-	"sort"
+	"slices"
 	"strings"
 
 	output "github.com/shhac/lib-agent-output"
@@ -39,14 +39,8 @@ func checkInside(times []float64, duration float64) error {
 
 func sortedUnique(in []float64) []float64 {
 	out := append([]float64(nil), in...)
-	sort.Float64s(out)
-	kept := out[:0]
-	for i, v := range out {
-		if i == 0 || v != out[i-1] {
-			kept = append(kept, v)
-		}
-	}
-	return kept
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 func scaleWidth(requested, source int) int {

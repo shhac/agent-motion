@@ -61,13 +61,10 @@ func (f *analyseFlags) validate() error {
 }
 
 func (f *analyseFlags) options(path string) engine.AnalyseOptions {
-	drift := f.drift
-	if drift == 0 {
-		drift = -1 // distinguish "explicitly off" from "unset"
-	}
 	return engine.AnalyseOptions{
 		Path: path, Start: f.start, End: f.end, Threshold: f.threshold,
-		Width: f.width, SampleFPS: f.sampleFPS, DriftSeconds: drift,
+		Width: f.width, SampleFPS: f.sampleFPS,
+		DriftSeconds: f.drift, NoDrift: f.drift == 0,
 		MaxEvents: f.maxEvents, Buckets: f.buckets, Native: f.native, Series: f.series,
 	}
 }

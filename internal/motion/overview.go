@@ -33,7 +33,7 @@ func (a *Analyzer) Overview(t Timeline, buckets int) Overview {
 		Activity: bucketActivity(a.samples, start, end, buckets),
 	}
 	if len(o.Activity) > 0 {
-		o.BucketSeconds = round((end - start) / float64(len(o.Activity)))
+		o.BucketSeconds = round2((end - start) / float64(len(o.Activity)))
 		o.Sparkline, o.PeakBucket = sparkline(o.Activity)
 	}
 	o.Narrative = narrate(t, o, start, end)
@@ -127,12 +127,12 @@ func quietRanges(events []Event, start, end float64) [][2]float64 {
 	cursor := start
 	for _, b := range busy {
 		if b[0]-cursor >= minQuiet {
-			out = append(out, [2]float64{round(cursor), round(b[0])})
+			out = append(out, [2]float64{round2(cursor), round2(b[0])})
 		}
 		cursor = math.Max(cursor, b[1])
 	}
 	if end-cursor >= minQuiet {
-		out = append(out, [2]float64{round(cursor), round(end)})
+		out = append(out, [2]float64{round2(cursor), round2(end)})
 	}
 	return out
 }
@@ -144,7 +144,7 @@ func busiest(s []Sample) float64 {
 			best, at = x.Changed, x.Time
 		}
 	}
-	return round(at)
+	return round2(at)
 }
 
 // inspectTimes proposes frame timestamps that would show each event, capped so
@@ -153,15 +153,14 @@ func inspectTimes(events []Event) []float64 {
 	const budget = 12
 	ranked := append([]Event(nil), events...)
 	sort.SliceStable(ranked, func(i, j int) bool {
-		return math.Max(ranked[i].PeakChanged, ranked[i].PeakDrift) >
-			math.Max(ranked[j].PeakChanged, ranked[j].PeakDrift)
+		return prominence(ranked[i]) > prominence(ranked[j])
 	})
 	seen := map[float64]bool{}
 	var out []float64
 	for _, e := range ranked {
-		at := round(e.Peak)
+		at := round2(e.Peak)
 		if e.Kind == KindGradual {
-			at = round((e.Start + e.End) / 2)
+			at = round2((e.Start + e.End) / 2)
 		}
 		if seen[at] {
 			continue
@@ -194,7 +193,7 @@ func bucketActivity(s []Sample, start, end float64, buckets int) []float64 {
 		out[i] = math.Max(out[i], x.Changed)
 	}
 	for i := range out {
-		out[i] = math.Round(out[i]*1000) / 1000
+		out[i] = round3(out[i])
 	}
 	return out
 }
@@ -219,8 +218,6 @@ func longestRange(r [][2]float64) [2]float64 {
 	return best
 }
 
-func round(v float64) float64 { return math.Round(v*100) / 100 }
-
 // sparkline draws the activity series as one short string. The ramp is square
 // root scaled against the peak bucket, because a single whole-frame change
 // would otherwise flatten every ordinary event to nothing.
@@ -238,5 +235,5 @@ func sparkline(values []float64) (string, float64) {
 		level := int(math.Round(math.Sqrt(v/peak) * float64(len(ramp)-1)))
 		out[i] = ramp[min(len(ramp)-1, max(0, level))]
 	}
-	return string(out), math.Round(peak*1000) / 1000
+	return string(out), round3(peak)
 }

@@ -66,9 +66,7 @@ func (a *Analyzer) persists(region image.Rectangle, start, end float64) *bool {
 	for y := r.Min.Y; y < r.Max.Y; y++ {
 		for x := r.Min.X; x < r.Max.X; x++ {
 			i := (y*a.cpWidth + x) * 3
-			total += (absDiff(before.pix[i], after.pix[i]) +
-				absDiff(before.pix[i+1], after.pix[i+1]) +
-				absDiff(before.pix[i+2], after.pix[i+2])) / 3
+			total += pixelDelta(before.pix, after.pix, i)
 		}
 	}
 	changed := total/float64(r.Dx()*r.Dy()) > math.Max(4, a.opt.Threshold/2)

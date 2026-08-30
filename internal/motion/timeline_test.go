@@ -15,11 +15,8 @@ import (
 func analyseReference(t *testing.T, width, height int, opt motion.Options) (*motion.Analyzer, fixture.Scenario) {
 	t.Helper()
 	s := fixture.Reference()
-	dec := &video.Fake{
-		Info:   video.Info{Width: s.Width, Height: s.Height, FPS: s.FPS, Duration: s.Duration(), NBFrames: s.Frames},
-		Render: s.Frame,
-	}
 	a := motion.New(width, height, opt)
+	dec := s.Decoder()
 	req := video.Request{Path: "reference", Width: width, Height: height, FPS: s.FPS}
 	if err := dec.Decode(context.Background(), req, a.Add); err != nil {
 		t.Fatalf("decode: %v", err)

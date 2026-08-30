@@ -39,22 +39,26 @@ func (f *FFmpeg) Available() error {
 }
 
 type probeResponse struct {
-	Streams []struct {
-		CodecType    string `json:"codec_type"`
-		CodecName    string `json:"codec_name"`
-		Width        int    `json:"width"`
-		Height       int    `json:"height"`
-		AvgFrameRate string `json:"avg_frame_rate"`
-		PixFmt       string `json:"pix_fmt"`
-		NBFrames     string `json:"nb_frames"`
-		SideData     []struct {
-			Rotation int `json:"rotation"`
-		} `json:"side_data_list"`
-	} `json:"streams"`
-	Format struct {
+	Streams []stream `json:"streams"`
+	Format  struct {
 		Duration string `json:"duration"`
 		BitRate  string `json:"bit_rate"`
 	} `json:"format"`
+}
+
+type stream struct {
+	CodecType    string     `json:"codec_type"`
+	CodecName    string     `json:"codec_name"`
+	Width        int        `json:"width"`
+	Height       int        `json:"height"`
+	AvgFrameRate string     `json:"avg_frame_rate"`
+	PixFmt       string     `json:"pix_fmt"`
+	NBFrames     string     `json:"nb_frames"`
+	SideData     []sideData `json:"side_data_list"`
+}
+
+type sideData struct {
+	Rotation int `json:"rotation"`
 }
 
 // Probe reads stream metadata without decoding pixels.
@@ -76,6 +80,14 @@ func (f *FFmpeg) Probe(ctx context.Context, path string) (Info, error) {
 	if err := json.Unmarshal(raw, &response); err != nil {
 		return Info{}, output.Wrap(err, output.FixableByRetry).WithHint("FFprobe returned unparseable JSON")
 	}
+	return infoFrom(response)
+}
+
+// infoFrom maps an FFprobe response onto Info. It is separated from running the
+// process because the mapping rules — first video stream wins, audio anywhere
+// counts, a frame rate must be positive — are the part worth testing, and a test
+// for them should not need FFprobe installed.
+func infoFrom(response probeResponse) (Info, error) {
 	info := Info{}
 	found := false
 	for _, s := range response.Streams {
@@ -115,17 +127,7 @@ func (f *FFmpeg) Decode(ctx context.Context, req Request, fn func(Frame) error) 
 	if req.Width <= 0 || req.Height <= 0 || req.FPS <= 0 {
 		return output.New("decode request needs explicit frame dimensions and rate", output.FixableByRetry)
 	}
-	args := []string{"-v", "error"}
-	if req.Start > 0 {
-		args = append(args, "-ss", seconds(req.Start))
-	}
-	args = append(args, "-i", req.Path)
-	if req.End > req.Start {
-		args = append(args, "-t", seconds(req.End-req.Start))
-	}
-	args = append(args, "-an", "-sn", "-dn", "-vf", filters(req), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1")
-
-	cmd := exec.CommandContext(ctx, f.FFmpegPath, args...)
+	cmd := exec.CommandContext(ctx, f.FFmpegPath, decodeArgs(req)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
@@ -159,14 +161,24 @@ func (f *FFmpeg) Decode(ctx context.Context, req Request, fn func(Frame) error) 
 	return nil
 }
 
-// filters pins both the frame rate and the frame size so the raw stream has a
-// known shape and every frame index maps to a known timestamp.
-func filters(req Request) string {
-	return fmt.Sprintf("fps=%s,scale=%d:%d", seconds(req.FPS), req.Width, req.Height)
+// decodeArgs builds the raw-video command line. Order matters and is part of
+// the contract: -ss before -i is a fast seek, -t is a duration rather than an
+// end timestamp, and the rawvideo/rgb24 tail is what makes output deterministic.
+func decodeArgs(req Request) []string {
+	args := []string{"-v", "error"}
+	if req.Start > 0 {
+		args = append(args, "-ss", seconds(req.Start))
+	}
+	args = append(args, "-i", req.Path)
+	if req.End > req.Start {
+		args = append(args, "-t", seconds(req.End-req.Start))
+	}
+	return append(args, "-an", "-sn", "-dn", "-vf", filters(req),
+		"-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1")
 }
 
-// Still decodes a single frame at a timestamp and returns it as PNG bytes.
-func (f *FFmpeg) Still(ctx context.Context, path string, at float64, width int) ([]byte, error) {
+// stillArgs builds the single-frame command line.
+func stillArgs(path string, at float64, width int) []string {
 	args := []string{"-v", "error"}
 	if at > 0 {
 		args = append(args, "-ss", seconds(at))
@@ -175,8 +187,18 @@ func (f *FFmpeg) Still(ctx context.Context, path string, at float64, width int) 
 	if width > 0 {
 		args = append(args, "-vf", fmt.Sprintf("scale=%d:-2", width))
 	}
-	args = append(args, "-f", "image2", "-c:v", "png", "pipe:1")
-	cmd := exec.CommandContext(ctx, f.FFmpegPath, args...)
+	return append(args, "-f", "image2", "-c:v", "png", "pipe:1")
+}
+
+// filters pins both the frame rate and the frame size so the raw stream has a
+// known shape and every frame index maps to a known timestamp.
+func filters(req Request) string {
+	return fmt.Sprintf("fps=%s,scale=%d:%d", seconds(req.FPS), req.Width, req.Height)
+}
+
+// Still decodes a single frame at a timestamp and returns it as PNG bytes.
+func (f *FFmpeg) Still(ctx context.Context, path string, at float64, width int) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, f.FFmpegPath, stillArgs(path, at, width)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()

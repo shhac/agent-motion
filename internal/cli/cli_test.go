@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"image"
-	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -12,22 +11,12 @@ import (
 	"testing"
 
 	"github.com/shhac/agent-motion/internal/fixture"
-	"github.com/shhac/agent-motion/internal/video"
 )
 
 // run executes the CLI against a synthetic video and returns decoded stdout.
 func run(t *testing.T, args ...string) (map[string]any, error) {
 	t.Helper()
-	s := fixture.Reference()
-	dec := &video.Fake{
-		Info: video.Info{
-			Width: s.Width, Height: s.Height, FPS: s.FPS,
-			Duration: s.Duration(), NBFrames: s.Frames, Codec: "h264",
-		},
-		Render:   s.Frame,
-		StillPNG: stillPNG(t),
-	}
-	root := newRoot("test", dec)
+	root := newRoot("test", fixture.Reference().Decoder())
 	var stdout bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&bytes.Buffer{})
@@ -187,12 +176,7 @@ func TestBadFlagsAreReportedAsAgentFixable(t *testing.T) {
 }
 
 func TestYAMLFormatIsAvailable(t *testing.T) {
-	s := fixture.Reference()
-	dec := &video.Fake{
-		Info:   video.Info{Width: s.Width, Height: s.Height, FPS: s.FPS, Duration: s.Duration(), NBFrames: s.Frames},
-		Render: s.Frame, StillPNG: stillPNG(t),
-	}
-	root := newRoot("test", dec)
+	root := newRoot("test", fixture.Reference().Decoder())
 	var stdout bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetArgs([]string{"inspect", "ref.mp4", "--format", "yaml"})
@@ -202,21 +186,6 @@ func TestYAMLFormatIsAvailable(t *testing.T) {
 	if !strings.Contains(stdout.String(), "source:") {
 		t.Errorf("yaml output looks wrong:\n%s", stdout.String())
 	}
-}
-
-func stillPNG(t *testing.T) []byte {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, 160, 90))
-	for y := 0; y < 90; y++ {
-		for x := 0; x < 160; x++ {
-			img.SetRGBA(x, y, color.RGBA{B: uint8(x), A: 0xff})
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
 }
 
 func readPNG(t *testing.T, path string) image.Image {

@@ -3,7 +3,7 @@ package motion
 import (
 	"image"
 	"math"
-	"sort"
+	"slices"
 )
 
 // TimelineOptions tunes segmentation. Zero values take documented defaults.
@@ -49,6 +49,8 @@ type group struct {
 	span
 	slow bool
 }
+
+func (g group) timescale() timescale { return timescale(g.slow) }
 
 func (a *Analyzer) gapSamples(gap, fps float64) int {
 	if fps <= 0 {
@@ -96,18 +98,18 @@ func (a *Analyzer) slowSpans(floors []float64, consumed []bool, gap int, opt Tim
 	lag := int(math.Round(opt.DriftSeconds * opt.FPS))
 	var out []cellSpan
 	for c := range floors {
-		fast := make([]bool, len(a.samples))
+		// Drift stays elevated for one window after any real change, so a
+		// sample is masked when the most recent activity is within the window.
+		masked := make([]bool, len(a.samples))
+		recent := -1
 		for i := range a.samples {
-			if !consumed[i] && a.cellChanged(i, c) <= floors[c] {
-				continue
+			if consumed[i] || a.cellChanged(i, c) > floors[c] {
+				recent = i
 			}
-			// Drift stays elevated for one window after any real change.
-			for j := i; j <= min(len(a.samples)-1, i+lag); j++ {
-				fast[j] = true
-			}
+			masked[i] = recent >= 0 && i-recent <= lag
 		}
 		for _, sp := range runs(len(a.samples), func(i int) bool {
-			return !fast[i] && a.cellDrift(i, c) > floors[c]
+			return !masked[i] && a.cellDrift(i, c) > floors[c]
 		}, lag) {
 			if sp.to-sp.from+1 >= max(2, lag) {
 				out = append(out, cellSpan{cell: c, span: sp, slow: true})
@@ -129,31 +131,15 @@ func (a *Analyzer) cellDrift(i, c int) float64 {
 // happening across several cells is one event and two things happening at once
 // in different places stay two.
 func groupSpans(spans []cellSpan, grid Grid, gap int) []group {
-	parent := make([]int, len(spans))
-	for i := range parent {
-		parent[i] = i
-	}
-	var find func(int) int
-	find = func(i int) int {
-		if parent[i] != i {
-			parent[i] = find(parent[i])
-		}
-		return parent[i]
-	}
+	sets := newDisjoint(len(spans))
 	for i := range spans {
 		for j := i + 1; j < len(spans); j++ {
-			if spans[i].slow != spans[j].slow {
-				continue
+			if mergeable(spans[i], spans[j], grid, gap) {
+				sets.union(i, j)
 			}
-			if !grid.Adjacent(spans[i].cell, spans[j].cell) {
-				continue
-			}
-			if !overlaps(spans[i].span, spans[j].span, gap) {
-				continue
-			}
-			parent[find(i)] = find(j)
 		}
 	}
+	find := sets.find
 	byRoot := map[int]*group{}
 	var order []int
 	for i, s := range spans {
@@ -170,16 +156,44 @@ func groupSpans(spans []cellSpan, grid Grid, gap int) []group {
 	out := make([]group, 0, len(order))
 	for _, root := range order {
 		g := byRoot[root]
-		sort.Ints(g.cells)
-		g.cells = dedupe(g.cells)
+		slices.Sort(g.cells)
+		g.cells = slices.Compact(g.cells)
 		out = append(out, *g)
 	}
 	return out
 }
 
+// mergeable reports whether two cell stretches belong to the same event: same
+// timescale, touching cells, and overlapping in time.
+func mergeable(a, b cellSpan, grid Grid, gap int) bool {
+	return a.slow == b.slow && grid.Adjacent(a.cell, b.cell) && overlaps(a.span, b.span, gap)
+}
+
 func overlaps(a, b span, gap int) bool {
 	return a.from-gap <= b.to && b.from-gap <= a.to
 }
+
+// disjoint is the union-find behind grouping. It is separated so groupSpans
+// reads as "merge what touches, then collect", which is its actual job.
+type disjoint []int
+
+func newDisjoint(n int) disjoint {
+	d := make(disjoint, n)
+	for i := range d {
+		d[i] = i
+	}
+	return d
+}
+
+func (d disjoint) find(i int) int {
+	for d[i] != i {
+		d[i] = d[d[i]]
+		i = d[i]
+	}
+	return i
+}
+
+func (d disjoint) union(i, j int) { d[d.find(i)] = d.find(j) }
 
 // wholeFrameEvents pulls out cuts and flashes before anything else, so one
 // enormous transition does not swallow the events around it.
@@ -190,21 +204,25 @@ func (a *Analyzer) wholeFrameEvents(opt TimelineOptions, consumed []bool) []Even
 		if sp.to-sp.from+1 > 2 {
 			continue // a long whole-frame run is sustained activity, not a boundary
 		}
+		peak, sum := 0.0, 0.0
 		for i := sp.from; i <= sp.to; i++ {
 			consumed[i] = true
+			peak = math.Max(peak, s[i].Changed)
+			sum += s[i].Changed
 		}
 		whole := image.Rect(0, 0, a.width, a.height)
+		persists := a.persists(whole, s[sp.from].Time, s[sp.to].Time)
+		// One transition that stays is a boundary; anything that comes back is
+		// a flash, however briefly it lasted.
+		kind := KindCut
+		if sp.to > sp.from || falsey(persists) {
+			kind = KindFlash
+		}
 		e := Event{
-			Kind: KindCut, Start: s[sp.from].Time, End: s[sp.to].Time, Peak: s[sp.from].Time,
+			Kind: kind, Start: s[sp.from].Time, End: s[sp.to].Time, Peak: s[sp.from].Time,
+			PeakChanged: peak, MeanChanged: sum / float64(sp.to-sp.from+1),
 			Region: a.sourceRect(whole, opt), RegionArea: 1, Position: "whole frame",
-			Persists: a.persists(whole, s[sp.from].Time, s[sp.to].Time),
-		}
-		for i := sp.from; i <= sp.to; i++ {
-			e.PeakChanged = math.Max(e.PeakChanged, s[i].Changed)
-			e.MeanChanged += s[i].Changed / float64(sp.to-sp.from+1)
-		}
-		if sp.to > sp.from || falsey(e.Persists) {
-			e.Kind = KindFlash
+			Persists: persists,
 		}
 		e.round()
 		e.Summary = wholeFrameSummary(e)

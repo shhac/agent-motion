@@ -17,10 +17,7 @@ import (
 func defectTimeline(t *testing.T) (motion.Timeline, motion.Overview) {
 	t.Helper()
 	s := fixture.Defect()
-	dec := &video.Fake{
-		Info:   video.Info{Width: s.Width, Height: s.Height, FPS: s.FPS, Duration: s.Duration(), NBFrames: s.Frames},
-		Render: s.Frame,
-	}
+	dec := s.Decoder()
 	a := motion.New(320, 180, motion.Options{
 		Threshold: 12, DriftFrames: 30, Checkpoints: 128, ExpectedFrames: s.Frames, IgnoreAbove: 0.5,
 	})

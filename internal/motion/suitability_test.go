@@ -11,9 +11,9 @@ import (
 	"github.com/shhac/agent-motion/internal/video"
 )
 
-func assessScenario(t *testing.T, info video.Info, render func([]byte, int)) motion.Timeline {
+func assessScenario(t *testing.T, dec *video.Fake) motion.Timeline {
 	t.Helper()
-	dec := &video.Fake{Info: info, Render: render}
+	info := dec.Info
 	a := motion.New(160, 90, motion.Options{Threshold: 12, DriftFrames: 15, Checkpoints: 32, IgnoreAbove: 0.5})
 	req := video.Request{Path: "x", Width: 160, Height: 90, FPS: info.FPS}
 	if err := dec.Decode(context.Background(), req, a.Add); err != nil {
@@ -26,10 +26,7 @@ func assessScenario(t *testing.T, info video.Info, render func([]byte, int)) mot
 }
 
 func TestFixedViewportFootageIsCalledSuitable(t *testing.T) {
-	s := fixture.Reference()
-	timeline := assessScenario(t,
-		video.Info{Width: s.Width, Height: s.Height, FPS: s.FPS, Duration: s.Duration(), NBFrames: s.Frames},
-		s.Frame)
+	timeline := assessScenario(t, fixture.Reference().Decoder())
 	if timeline.Fit.Verdict != motion.FitGood {
 		t.Errorf("verdict = %q (%+v), want %q for a mostly static screen",
 			timeline.Fit.Verdict, timeline.Fit, motion.FitGood)
@@ -55,8 +52,10 @@ func TestFullFrameMotionIsCalledUnsuitable(t *testing.T) {
 			}
 		}
 	}
-	timeline := assessScenario(t,
-		video.Info{Width: w, Height: h, FPS: 30, Duration: 4, NBFrames: 120}, pan)
+	timeline := assessScenario(t, &video.Fake{
+		Info:   video.Info{Width: w, Height: h, FPS: 30, Duration: 4, NBFrames: 120},
+		Render: pan,
+	})
 
 	if timeline.Fit.Verdict != motion.FitPoor {
 		t.Fatalf("verdict = %q (%+v), want %q", timeline.Fit.Verdict, timeline.Fit, motion.FitPoor)

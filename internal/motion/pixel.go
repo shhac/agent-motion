@@ -1,5 +1,12 @@
 package motion
 
+// pixelDelta is the mean absolute RGB difference at one pixel offset. It is the
+// definition --threshold is measured against, so it lives in exactly one place:
+// three verbatim copies meant a change to the metric could silently miss a path.
+func pixelDelta(a, b []byte, i int) float64 {
+	return (absDiff(a[i], b[i]) + absDiff(a[i+1], b[i+1]) + absDiff(a[i+2], b[i+2])) / 3
+}
+
 func absDiff(a, b byte) float64 {
 	if a > b {
 		return float64(a - b)

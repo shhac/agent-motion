@@ -15,14 +15,7 @@ import (
 
 func referenceDecoder() (*video.Fake, fixture.Scenario) {
 	s := fixture.Reference()
-	return &video.Fake{
-		Info: video.Info{
-			Width: s.Width, Height: s.Height, FPS: s.FPS,
-			Duration: s.Duration(), NBFrames: s.Frames, Codec: "h264",
-		},
-		Render:   s.Frame,
-		StillPNG: thumbnailPNG(),
-	}, s
+	return s.Decoder(), s
 }
 
 func TestAnalyseDescribesTheWholeVideo(t *testing.T) {

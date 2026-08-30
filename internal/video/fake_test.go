@@ -13,10 +13,7 @@ import (
 // against behaviour the real decoder does not have.
 func TestFakeHonoursIntervalRateAndScale(t *testing.T) {
 	s := fixture.Reference()
-	dec := &video.Fake{
-		Info:   video.Info{Width: s.Width, Height: s.Height, FPS: s.FPS, Duration: s.Duration(), NBFrames: s.Frames},
-		Render: s.Frame,
-	}
+	dec := s.Decoder()
 	var times []float64
 	var sizes []int
 	err := dec.Decode(context.Background(), video.Request{

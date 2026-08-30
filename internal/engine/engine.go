@@ -52,12 +52,15 @@ type Params struct {
 
 // AnalyseOptions selects an interval and the sensitivity of the pass.
 type AnalyseOptions struct {
-	Path         string
-	Start, End   float64
-	Threshold    float64
-	Width        int
-	SampleFPS    float64
+	Path       string
+	Start, End float64
+	Threshold  float64
+	Width      int
+	SampleFPS  float64
+	// DriftSeconds is the slow-comparison window; zero takes the default.
+	// NoDrift turns the slow timescale off, which zero alone cannot express.
 	DriftSeconds float64
+	NoDrift      bool
 	MaxEvents    int
 	Buckets      int
 	// Native analyses at the source resolution. It is what the image needs and
@@ -100,10 +103,9 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 		return nil, err
 	}
 	opt = opt.withDefaults(info)
-	start, end := clampInterval(opt.Start, opt.End, info.Duration)
-	if info.Duration > 0 && start >= info.Duration {
-		return nil, output.New(fmt.Sprintf("--start %.3fs is at or past the %.3fs end of the video", start, info.Duration), output.FixableByAgent).
-			WithHint("choose a start inside the video duration")
+	start, end, err := resolveInterval(opt, info)
+	if err != nil {
+		return nil, err
 	}
 	width, height := video.FitWidth(info, opt.Width)
 	expected := int(math.Ceil((end - start) * opt.SampleFPS))
@@ -164,9 +166,10 @@ func (o AnalyseOptions) withDefaults(info video.Info) AnalyseOptions {
 	if o.SampleFPS <= 0 {
 		o.SampleFPS = info.FPS
 	}
-	if o.DriftSeconds < 0 {
+	switch {
+	case o.NoDrift:
 		o.DriftSeconds = 0
-	} else if o.DriftSeconds == 0 {
+	case o.DriftSeconds <= 0:
 		o.DriftSeconds = DefaultDriftSeconds
 	}
 	if o.MaxEvents <= 0 {
@@ -183,14 +186,23 @@ func (o AnalyseOptions) withDefaults(info video.Info) AnalyseOptions {
 	return o
 }
 
-func clampInterval(start, end, duration float64) (float64, float64) {
+// resolveInterval clamps the requested interval to the source and rejects a
+// start there is no video at. Separated so the rules are readable and testable
+// without decoding anything.
+func resolveInterval(opt AnalyseOptions, info video.Info) (float64, float64, error) {
+	start, end := opt.Start, opt.End
 	if start < 0 {
 		start = 0
 	}
-	if end <= 0 || (duration > 0 && end > duration) {
-		end = duration
+	if end <= 0 || (info.Duration > 0 && end > info.Duration) {
+		end = info.Duration
 	}
-	return start, end
+	if info.Duration > 0 && start >= info.Duration {
+		return 0, 0, output.New(
+			fmt.Sprintf("--start %.3fs is at or past the %.3fs end of the video", start, info.Duration),
+			output.FixableByAgent).WithHint("choose a start inside the video duration")
+	}
+	return start, end, nil
 }
 
 func round(v float64) float64 { return math.Round(v*100) / 100 }

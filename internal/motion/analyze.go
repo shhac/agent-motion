@@ -126,8 +126,6 @@ func New(width, height int, opt Options) *Analyzer {
 	if opt.DriftFrames > 0 {
 		a.nearCells = make([]Cell, opt.GridCols*opt.GridRows)
 		a.farCells = make([]Cell, opt.GridCols*opt.GridRows)
-	}
-	if opt.DriftFrames > 0 {
 		// Two spare slots let drift compare against two references, so a
 		// single anomalous frame cannot masquerade as a slow change.
 		a.lag = opt.DriftFrames
@@ -164,6 +162,7 @@ func (a *Analyzer) Add(f video.Frame) error {
 		return nil
 	}
 	sample := a.difference(f)
+	a.accumulate(f, sample)
 	a.drift(f, &sample)
 	a.samples = append(a.samples, sample)
 	copy(a.previous, f.Pix)
@@ -181,24 +180,16 @@ func (a *Analyzer) difference(f video.Frame) Sample {
 	var energy float64
 	a.changedIndex = a.changedIndex[:0]
 
-	cols, rows := a.grid.Cols, a.grid.Rows
 	for p := 0; p < a.pixels; p++ {
 		i := p * 3
-		delta := (absDiff(f.Pix[i], a.previous[i]) +
-			absDiff(f.Pix[i+1], a.previous[i+1]) +
-			absDiff(f.Pix[i+2], a.previous[i+2])) / 3
+		delta := pixelDelta(f.Pix, a.previous, i)
 		energy += delta
 		if delta <= a.opt.Threshold {
 			continue
 		}
 		a.deltas[p] = float32(delta)
 		a.changedIndex = append(a.changedIndex, int32(p))
-
-		x, y := p%a.width, p/a.width
-		c := &cells[(y*rows/a.height)*cols+(x*cols/a.width)]
-		c.Changed++
-		c.MinX, c.MinY = minI16(c.MinX, int16(x)), minI16(c.MinY, int16(y))
-		c.MaxX, c.MaxY = maxI16(c.MaxX, int16(x)), maxI16(c.MaxY, int16(y))
+		a.mark(cells, p)
 	}
 
 	s := Sample{
@@ -207,7 +198,6 @@ func (a *Analyzer) difference(f video.Frame) Sample {
 		Energy:  energy / float64(a.pixels),
 		Cells:   cells,
 	}
-	a.accumulate(f, s)
 	return s
 }
 
@@ -297,23 +287,25 @@ func resetBounds(cells []Cell) {
 func (a *Analyzer) compare(current, reference []byte, cells []Cell) int {
 	resetBounds(cells)
 	changed := 0
-	cols, rows := a.grid.Cols, a.grid.Rows
 	for p := 0; p < a.pixels; p++ {
 		i := p * 3
-		delta := (absDiff(current[i], reference[i]) +
-			absDiff(current[i+1], reference[i+1]) +
-			absDiff(current[i+2], reference[i+2])) / 3
-		if delta <= a.opt.Threshold {
+		if pixelDelta(current, reference, i) <= a.opt.Threshold {
 			continue
 		}
 		changed++
-		x, y := p%a.width, p/a.width
-		c := &cells[(y*rows/a.height)*cols+(x*cols/a.width)]
-		c.Changed++
-		c.MinX, c.MinY = minI16(c.MinX, int16(x)), minI16(c.MinY, int16(y))
-		c.MaxX, c.MaxY = maxI16(c.MaxX, int16(x)), maxI16(c.MaxY, int16(y))
+		a.mark(cells, p)
 	}
 	return changed
+}
+
+// mark records a changed pixel against its grid cell. The index arithmetic has
+// to agree with Grid.Bounds for regions to be right, so it is written once.
+func (a *Analyzer) mark(cells []Cell, p int) {
+	x, y := p%a.width, p/a.width
+	c := &cells[(y*a.grid.Rows/a.height)*a.grid.Cols+(x*a.grid.Cols/a.width)]
+	c.Changed++
+	c.MinX, c.MinY = minI16(c.MinX, int16(x)), minI16(c.MinY, int16(y))
+	c.MaxX, c.MaxY = maxI16(c.MaxX, int16(x)), maxI16(c.MaxY, int16(y))
 }
 
 // Frames is the number of frames folded in.

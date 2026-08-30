@@ -1,7 +1,6 @@
 package motion
 
 import (
-	"math"
 	"sort"
 )
 
@@ -90,19 +89,25 @@ func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 }
 
 // trimToBudget keeps the most prominent events but preserves time order.
+//
+// It ranks indices, not timestamps: two events can begin on the same transition
+// in different parts of the frame, and keying on the start time would let both
+// through one slot while events_omitted under-reported the difference.
 func trimToBudget(events []Event, budget int) []Event {
-	ranked := append([]Event(nil), events...)
-	sort.SliceStable(ranked, func(i, j int) bool {
-		return math.Max(ranked[i].PeakChanged, ranked[i].PeakDrift) >
-			math.Max(ranked[j].PeakChanged, ranked[j].PeakDrift)
+	order := make([]int, len(events))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		return prominence(events[order[i]]) > prominence(events[order[j]])
 	})
-	keep := make(map[float64]bool, budget)
-	for _, e := range ranked[:budget] {
-		keep[e.Start] = true
+	keep := make([]bool, len(events))
+	for _, i := range order[:budget] {
+		keep[i] = true
 	}
 	out := make([]Event, 0, budget)
-	for _, e := range events {
-		if keep[e.Start] {
+	for i, e := range events {
+		if keep[i] {
 			out = append(out, e)
 		}
 	}
