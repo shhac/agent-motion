@@ -1,11 +1,6 @@
-// Package motion turns a stream of decoded frames into per-transition
-// statistics, per-pixel accumulations, and a described timeline. Nothing here
-// runs a process or touches the filesystem, so every behaviour is testable
-// from synthetic frames.
 package motion
 
 import (
-	"image"
 	"math"
 
 	"github.com/shhac/agent-motion/internal/video"
@@ -48,32 +43,6 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// Cell is one grid cell's contribution to one transition. Counts are pixels;
-// the box bounds the changed pixels inside the cell, in analysis coordinates.
-type Cell struct {
-	Changed                    int32
-	Drift                      int32
-	MinX, MinY, MaxX, MaxY     int16
-	DMinX, DMinY, DMaxX, DMaxY int16
-}
-
-// Box returns the changed area within the cell, empty when nothing changed.
-func (c Cell) Box() image.Rectangle {
-	if c.Changed == 0 {
-		return image.Rectangle{}
-	}
-	return image.Rect(int(c.MinX), int(c.MinY), int(c.MaxX)+1, int(c.MaxY)+1)
-}
-
-// DriftBox is the same for the slow timescale, which is the only bound a
-// gradual change has: it never registers as a fast change at all.
-func (c Cell) DriftBox() image.Rectangle {
-	if c.Drift == 0 {
-		return image.Rectangle{}
-	}
-	return image.Rect(int(c.DMinX), int(c.DMinY), int(c.DMaxX)+1, int(c.DMaxY)+1)
-}
-
 // Sample is one frame-to-frame transition.
 type Sample struct {
 	Index int     `json:"index"`
@@ -96,31 +65,6 @@ type PixelStats struct {
 	Changes       []int32
 	Reversals     []int32
 	Start, End    float64
-}
-
-// Grid describes the spatial decomposition used for segmentation.
-type Grid struct {
-	Cols, Rows    int
-	Width, Height int
-	// Pixels is the pixel count of each cell, which differs at the right and
-	// bottom edges when the frame does not divide evenly.
-	Pixels []int
-}
-
-// Bounds returns the analysis-coordinate rectangle of cell index i.
-func (g Grid) Bounds(i int) image.Rectangle {
-	col, row := i%g.Cols, i/g.Cols
-	return image.Rect(
-		col*g.Width/g.Cols, row*g.Height/g.Rows,
-		(col+1)*g.Width/g.Cols, (row+1)*g.Height/g.Rows,
-	)
-}
-
-// Adjacent reports whether two cells touch, including diagonally.
-func (g Grid) Adjacent(a, b int) bool {
-	dc := abs(a%g.Cols - b%g.Cols)
-	dr := abs(a/g.Cols - b/g.Cols)
-	return dc <= 1 && dr <= 1
 }
 
 // Analyzer consumes frames in order and accumulates everything the timeline
@@ -164,11 +108,6 @@ type Analyzer struct {
 	lag      int
 }
 
-type checkpoint struct {
-	time float64
-	pix  []byte
-}
-
 // New returns an Analyzer for frames of the given analysis size.
 func New(width, height int, opt Options) *Analyzer {
 	opt = opt.withDefaults()
@@ -207,27 +146,6 @@ func New(width, height int, opt Options) *Analyzer {
 	}
 	return a
 }
-
-func newGrid(cols, rows, width, height int) Grid {
-	g := Grid{Cols: cols, Rows: rows, Width: width, Height: height, Pixels: make([]int, cols*rows)}
-	for i := range g.Pixels {
-		b := g.Bounds(i)
-		g.Pixels[i] = max(1, b.Dx()*b.Dy())
-	}
-	return g
-}
-
-func checkpointSize(width, height int) (int, int) {
-	const target = 96
-	if width <= target {
-		return width, height
-	}
-	h := int(math.Round(float64(height) * target / float64(width)))
-	return target, max(1, h)
-}
-
-// Grid returns the spatial decomposition in use.
-func (a *Analyzer) Grid() Grid { return a.grid }
 
 // Add folds one frame into the accumulation. Frames must arrive in time order.
 func (a *Analyzer) Add(f video.Frame) error {
@@ -398,36 +316,6 @@ func (a *Analyzer) compare(current, reference []byte, cells []Cell) int {
 	return changed
 }
 
-func (a *Analyzer) recordCheckpoint(f video.Frame) {
-	if a.opt.Checkpoints <= 0 {
-		return
-	}
-	if a.cpCounter%a.cpStride != 0 {
-		a.cpCounter++
-		return
-	}
-	a.cpCounter++
-	if len(a.checkpoints) >= a.opt.Checkpoints {
-		a.thinCheckpoints()
-	}
-	pix := make([]byte, a.cpWidth*a.cpHeight*3)
-	downsample(f.Pix, a.width, a.height, pix, a.cpWidth, a.cpHeight)
-	a.checkpoints = append(a.checkpoints, checkpoint{time: f.Time, pix: pix})
-}
-
-// thinCheckpoints halves the retained set and doubles the stride, keeping a
-// bounded, evenly spaced history for a stream of unknown length.
-func (a *Analyzer) thinCheckpoints() {
-	kept := a.checkpoints[:0]
-	for i, c := range a.checkpoints {
-		if i%2 == 0 {
-			kept = append(kept, c)
-		}
-	}
-	a.checkpoints = kept
-	a.cpStride *= 2
-}
-
 // Frames is the number of frames folded in.
 func (a *Analyzer) Frames() int { return a.frames }
 
@@ -462,43 +350,4 @@ func (a *Analyzer) Coverage() float64 {
 		}
 	}
 	return float64(active) / float64(a.pixels)
-}
-
-func absDiff(a, b byte) float64 {
-	if a > b {
-		return float64(a - b)
-	}
-	return float64(b - a)
-}
-
-func abs(v int) int {
-	if v < 0 {
-		return -v
-	}
-	return v
-}
-
-func minI16(a, b int16) int16 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxI16(a, b int16) int16 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func downsample(src []byte, sw, sh int, dst []byte, dw, dh int) {
-	for y := 0; y < dh; y++ {
-		sy := y * sh / dh
-		for x := 0; x < dw; x++ {
-			sx := x * sw / dw
-			s, d := (sy*sw+sx)*3, (y*dw+x)*3
-			dst[d], dst[d+1], dst[d+2] = src[s], src[s+1], src[s+2]
-		}
-	}
 }
