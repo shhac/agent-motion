@@ -65,42 +65,66 @@ const (
 // to tell that from a real finding.
 type Assessment struct {
 	Verdict string `json:"verdict"`
+	// GlobalMotion is the share of the analysed interval during which change
+	// covers most of the frame at once. It is the measure that separates a
+	// screen with one animating widget from footage where a pan, a zoom, or
+	// ambient motion such as wind, water, fire or grain keeps everywhere
+	// moving. Both are busy every frame; only one is busy everywhere.
+	GlobalMotion float64 `json:"global_motion_share"`
 	// TypicalChanged is the median share of the frame changing per transition.
-	// It has to be an absolute measure: the per-cell noise floors adapt to the
-	// recording, so a relative one normalises away the very thing being asked.
 	TypicalChanged float64 `json:"typical_changed_fraction"`
 	Reason         string  `json:"reason"`
 	Advice         string  `json:"advice,omitempty"`
 }
 
-// assess measures how much of the frame is in motion at a typical moment.
-func (a *Analyzer) assess() Assessment {
-	if len(a.samples) == 0 {
+// assess judges whether this recording is the kind the tool works on.
+//
+// The question is not "is anything moving" — a heartbeat makes that true of any
+// dashboard — but "is everywhere moving, for most of the time". A pan, a slow
+// zoom, and ambient motion such as wind, water, fire, a crowd or film grain all
+// produce an event that covers most of the frame and lasts most of the
+// interval. In that regime the smaller events are fragments of one moving scene
+// and their boundaries are arbitrary.
+func assess(events []Event, samples []Sample, span float64) Assessment {
+	if len(samples) == 0 {
 		return Assessment{Verdict: FitGood, Reason: "Nothing to measure."}
 	}
-	changed := make([]float64, len(a.samples))
-	for i, s := range a.samples {
+	changed := make([]float64, len(samples))
+	for i, s := range samples {
 		changed[i] = s.Changed
 	}
 	typical := round4(median(changed))
 
-	switch {
-	case typical > 0.25:
-		return Assessment{
-			Verdict: FitPoor, TypicalChanged: typical,
-			Reason: fmt.Sprintf("In a typical frame %.0f%% of the picture changes. That is what a moving camera, a scrolling page, or full-motion video looks like, not a fixed viewport.", typical*100),
-			Advice: "Treat the events below as unreliable: where most of the frame moves at once, the boundaries between events are arbitrary and small findings are fragments of one moving scene. Use 'sheet' to look at the content instead, and 'frames' for specific moments.",
+	global := 0.0
+	if span > 0 {
+		for _, e := range events {
+			// Cuts and flashes cover the whole frame by definition and last no
+			// time at all; they are boundaries, not continuous motion.
+			if e.RegionArea <= 0.6 || e.Kind == KindCut || e.Kind == KindFlash {
+				continue
+			}
+			global = math.Max(global, (e.End-e.Start)/span)
 		}
-	case typical > 0.06:
+	}
+	global = round4(global)
+
+	switch {
+	case global > 0.5 || typical > 0.25:
 		return Assessment{
-			Verdict: FitMarginal, TypicalChanged: typical,
-			Reason: fmt.Sprintf("In a typical frame %.0f%% of the picture changes, which is a lot for a fixed viewport.", typical*100),
-			Advice: "Some events may be fragments of one continuously moving thing rather than separate findings. Check a 'sheet' before relying on the event list.",
+			Verdict: FitPoor, GlobalMotion: global, TypicalChanged: typical,
+			Reason: fmt.Sprintf("Change covers most of the frame for %.0f%% of the interval. Something keeps the whole picture moving — a camera pan or zoom, a scroll, or ambient motion such as wind, water, fire, a crowd or film grain — rather than a fixed viewport with discrete changes.", global*100),
+			Advice: "Do not read the events below as a list of findings: where everything moves, the small ones are fragments of one moving scene and their boundaries are arbitrary. Use 'sheet' and 'frames' to look at the content instead.",
+		}
+	case global > 0.2 || typical > 0.06:
+		return Assessment{
+			Verdict: FitMarginal, GlobalMotion: global, TypicalChanged: typical,
+			Reason: fmt.Sprintf("Change covers most of the frame for %.0f%% of the interval, which is a lot for a fixed viewport.", global*100),
+			Advice: "Some of the smaller events may be fragments of one continuously moving thing rather than separate findings. Look at a 'sheet' before relying on the event list.",
 		}
 	default:
 		return Assessment{
-			Verdict: FitGood, TypicalChanged: typical,
-			Reason: fmt.Sprintf("Most of the frame holds still; %.2f%% of it changes in a typical frame.", typical*100),
+			Verdict: FitGood, GlobalMotion: global, TypicalChanged: typical,
+			Reason: "Most of the frame holds still, so a change in one place is a finding rather than part of a moving scene.",
 		}
 	}
 }
@@ -175,7 +199,12 @@ func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 	}
 	sort.Slice(events, func(i, j int) bool { return events[i].Start < events[j].Start })
 
-	t := Timeline{NoiseFloor: round4(median(floors)), Events: events, Fit: a.assess()}
+	start, end := a.Span()
+	t := Timeline{
+		NoiseFloor: round4(median(floors)),
+		Events:     events,
+		Fit:        assess(events, a.samples, end-start),
+	}
 	if len(events) > opt.MaxEvents {
 		t.Events = trimToBudget(events, opt.MaxEvents)
 		t.Truncated = len(events) - len(t.Events)
