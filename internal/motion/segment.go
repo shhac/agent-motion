@@ -39,7 +39,7 @@ type span struct{ from, to int } // inclusive sample indices
 type cellSpan struct {
 	cell int
 	span
-	slow bool
+	scale timescale
 }
 
 // group is a set of touching cells active over the same stretch, which is what
@@ -47,10 +47,8 @@ type cellSpan struct {
 type group struct {
 	cells []int
 	span
-	slow bool
+	scale timescale
 }
-
-func (g group) timescale() timescale { return timescale(g.slow) }
 
 func (a *Analyzer) gapSamples(gap, fps float64) int {
 	if fps <= 0 {
@@ -67,7 +65,7 @@ func (a *Analyzer) cellFloors(minimum float64) []float64 {
 	series := make([]float64, len(a.samples))
 	for c := range floors {
 		for i, s := range a.samples {
-			series[i] = float64(s.Cells[c].Changed) / float64(a.grid.Pixels[c])
+			series[i] = float64(s.Cells[c].Count(fast)) / float64(a.grid.Pixels[c])
 		}
 		// Two changed pixels is the smallest thing worth calling an event; one
 		// is indistinguishable from a single noisy pixel.
@@ -80,7 +78,7 @@ func (a *Analyzer) fastSpans(floors []float64, consumed []bool, gap int) []cellS
 	var out []cellSpan
 	for c := range floors {
 		for _, sp := range runs(len(a.samples), func(i int) bool {
-			return !consumed[i] && a.cellChanged(i, c) > floors[c]
+			return !consumed[i] && a.cellFraction(i, c, fast) > floors[c]
 		}, gap) {
 			out = append(out, cellSpan{cell: c, span: sp})
 		}
@@ -103,28 +101,25 @@ func (a *Analyzer) slowSpans(floors []float64, consumed []bool, gap int, opt Tim
 		masked := make([]bool, len(a.samples))
 		recent := -1
 		for i := range a.samples {
-			if consumed[i] || a.cellChanged(i, c) > floors[c] {
+			if consumed[i] || a.cellFraction(i, c, fast) > floors[c] {
 				recent = i
 			}
 			masked[i] = recent >= 0 && i-recent <= lag
 		}
 		for _, sp := range runs(len(a.samples), func(i int) bool {
-			return !masked[i] && a.cellDrift(i, c) > floors[c]
+			return !masked[i] && a.cellFraction(i, c, slow) > floors[c]
 		}, lag) {
 			if sp.to-sp.from+1 >= max(2, lag) {
-				out = append(out, cellSpan{cell: c, span: sp, slow: true})
+				out = append(out, cellSpan{cell: c, span: sp, scale: slow})
 			}
 		}
 	}
 	return out
 }
 
-func (a *Analyzer) cellChanged(i, c int) float64 {
-	return float64(a.samples[i].Cells[c].Changed) / float64(a.grid.Pixels[c])
-}
-
-func (a *Analyzer) cellDrift(i, c int) float64 {
-	return float64(a.samples[i].Cells[c].Drift) / float64(a.grid.Pixels[c])
+// cellFraction is the share of one cell that differed, on one timescale.
+func (a *Analyzer) cellFraction(i, c int, t timescale) float64 {
+	return float64(a.samples[i].Cells[c].Count(t)) / float64(a.grid.Pixels[c])
 }
 
 // groupSpans merges touching cells whose active stretches overlap, so one thing
@@ -146,7 +141,7 @@ func groupSpans(spans []cellSpan, grid Grid, gap int) []group {
 		root := find(i)
 		g, ok := byRoot[root]
 		if !ok {
-			g = &group{span: span{from: s.from, to: s.to}, slow: s.slow}
+			g = &group{span: span{from: s.from, to: s.to}, scale: s.scale}
 			byRoot[root] = g
 			order = append(order, root)
 		}
@@ -166,7 +161,7 @@ func groupSpans(spans []cellSpan, grid Grid, gap int) []group {
 // mergeable reports whether two cell stretches belong to the same event: same
 // timescale, touching cells, and overlapping in time.
 func mergeable(a, b cellSpan, grid Grid, gap int) bool {
-	return a.slow == b.slow && grid.Adjacent(a.cell, b.cell) && overlaps(a.span, b.span, gap)
+	return a.scale == b.scale && grid.Adjacent(a.cell, b.cell) && overlaps(a.span, b.span, gap)
 }
 
 func overlaps(a, b span, gap int) bool {

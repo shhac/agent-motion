@@ -66,29 +66,30 @@ type AnalyseOptions struct {
 
 // Analysis is the result of one pass: what happened, when, and where.
 type Analysis struct {
-	Input       string            `json:"input"`
-	Source      video.Info        `json:"source"`
-	Params      Params            `json:"analysis"`
-	Narrative   string            `json:"narrative"`
+	Input  string     `json:"input"`
+	Source video.Info `json:"source"`
+	Params Params     `json:"analysis"`
+	// Overview is embedded rather than copied field by field: its JSON tags
+	// were already written to be these fields.
+	motion.Overview
 	Suitability motion.Assessment `json:"suitability"`
-	Busiest     float64           `json:"busiest_seconds"`
 	Coverage    float64           `json:"motion_coverage"`
 	Events      []motion.Event    `json:"events"`
 	Omitted     int               `json:"events_omitted,omitempty"`
-	Quiet       [][2]float64      `json:"quiet_ranges,omitempty"`
-	BucketSec   float64           `json:"bucket_seconds,omitempty"`
-	Sparkline   string            `json:"activity_sparkline,omitempty"`
-	PeakBucket  float64           `json:"activity_sparkline_full_scale,omitempty"`
-	Activity    []float64         `json:"activity_by_bucket,omitempty"`
-	Inspect     []float64         `json:"timestamps_worth_inspecting,omitempty"`
 	NextSteps   []string          `json:"next_steps,omitempty"`
 	Limits      []string          `json:"limits"`
 
-	analyzer *motion.Analyzer
+	// image is what the activity renderer needs, captured here so a finished
+	// result does not keep the whole live accumulator — its drift ring and its
+	// checkpoint set — alive for commands that never draw anything.
+	image imageInputs
 }
 
-// Analyzer exposes the accumulated pass for a caller that also wants an image.
-func (a *Analysis) Analyzer() *motion.Analyzer { return a.analyzer }
+type imageInputs struct {
+	stats       motion.PixelStats
+	transitions int
+	ignored     []float64
+}
 
 // Analyse decodes the selected interval once and describes it.
 func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, error) {
@@ -124,6 +125,9 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 		DriftSeconds: opt.DriftSeconds, CutFraction: CutFraction, MaxEvents: opt.MaxEvents,
 	})
 	overview := analyzer.Overview(timeline, opt.Buckets)
+	if !opt.Series {
+		overview.Activity = nil
+	}
 	spanStart, spanEnd := analyzer.Span()
 
 	return &Analysis{
@@ -135,21 +139,18 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 			Threshold: opt.Threshold, DriftSeconds: opt.DriftSeconds,
 			NoiseFloor: timeline.NoiseFloor,
 		},
-		Narrative:   overview.Narrative,
+		Overview:    overview,
 		Suitability: timeline.Fit,
-		Busiest:     overview.Busiest,
 		Coverage:    round4(analyzer.Coverage()),
 		Events:      timeline.Events,
 		Omitted:     timeline.Truncated,
-		Quiet:       overview.Quiet,
-		BucketSec:   overview.BucketSeconds,
-		Sparkline:   overview.Sparkline,
-		PeakBucket:  overview.PeakBucket,
-		Activity:    seriesOrNil(overview.Activity, opt.Series),
-		Inspect:     overview.Inspect,
 		NextSteps:   nextSteps(opt, overview, timeline),
 		Limits:      limits(width, info.Width, opt.Threshold, timeline.Fit),
-		analyzer:    analyzer,
+		image: imageInputs{
+			stats:       analyzer.Pixels(),
+			transitions: analyzer.Accumulated(),
+			ignored:     analyzer.Ignored(),
+		},
 	}, nil
 }
 
@@ -202,10 +203,3 @@ func resolveInterval(opt AnalyseOptions, info video.Info) (float64, float64, err
 func round(v float64) float64 { return math.Round(v*100) / 100 }
 
 func round4(v float64) float64 { return math.Round(v*10000) / 10000 }
-
-func seriesOrNil(values []float64, include bool) []float64 {
-	if include {
-		return values
-	}
-	return nil
-}

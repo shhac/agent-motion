@@ -9,33 +9,13 @@ import (
 // timescale resolves the fast/slow choice once per group. Without it the same
 // "drift or changed?" decision is re-made at every site that reads a cell, and
 // an edit that updates four of them and misses the fifth still compiles.
-type timescale bool
+type timescale int
 
 const (
-	fast timescale = false
-	slow timescale = true
+	fast timescale = iota
+	slow
+	timescales
 )
-
-func (t timescale) count(c Cell) int32 {
-	if t == slow {
-		return c.Drift
-	}
-	return c.Changed
-}
-
-func (t timescale) box(c Cell) image.Rectangle {
-	if t == slow {
-		return c.DriftBox()
-	}
-	return c.Box()
-}
-
-func (a *Analyzer) cellMeasure(t timescale, i, c int) float64 {
-	if t == fast {
-		return a.cellChanged(i, c)
-	}
-	return a.cellDrift(i, c)
-}
 
 // groupStats is everything one pass over a group's samples establishes. Keeping
 // it separate lets the description paths be exercised without an Analyzer.
@@ -53,7 +33,7 @@ type groupStats struct {
 
 // aggregate reduces one group's stretch of samples to its statistics.
 func (a *Analyzer) aggregate(g group, floors []float64) groupStats {
-	t := g.timescale()
+	t := g.scale
 	stats := groupStats{frames: g.to - g.from + 1, peakTime: a.samples[g.from].Time}
 	seenFirst := false
 
@@ -99,7 +79,7 @@ func (a *Analyzer) describe(g group, floors []float64, opt TimelineOptions) (Eve
 	e.Position = positionOf(e.Region, opt)
 	e.Persists = a.persists(stats.union, e.Start, e.End)
 
-	if g.timescale() == slow {
+	if g.scale == slow {
 		return a.gradualEvent(e, opt), true
 	}
 	return a.fastEvent(e, stats, opt), true
@@ -133,11 +113,15 @@ func (a *Analyzer) fastEvent(e Event, stats groupStats, opt TimelineOptions) Eve
 	return e
 }
 
+// frameWideArea is the share of the frame above which an event stops being
+// something that happened somewhere and becomes something happening everywhere.
+const frameWideArea = 0.6
+
 // wholeFrame reports an event large enough that calling it localised would
 // mislead. Steps and blips are exempt: a one-off whole-frame change is a real,
 // locatable moment even though it covers everything.
 func wholeFrame(e Event) bool {
-	return e.RegionArea > 0.6 && e.Kind != KindStep && e.Kind != KindBlip
+	return e.RegionArea > frameWideArea && e.Kind != KindStep && e.Kind != KindBlip
 }
 
 func classify(e Event, stats groupStats) string {
@@ -168,7 +152,7 @@ func summarise(e Event, opt TimelineOptions) string {
 
 	switch e.Kind {
 	case KindGradual:
-		if e.RegionArea > 0.6 {
+		if e.RegionArea > frameWideArea {
 			return fmt.Sprintf("Most of the frame (%s) differs from itself %.1fs earlier, throughout %s to %s. That is what continuous motion looks like over the slow window, not a single gradual change.",
 				size, opt.DriftSeconds, clock(e.Start), clock(e.End))
 		}
@@ -191,7 +175,7 @@ func summarise(e Event, opt TimelineOptions) string {
 		return fmt.Sprintf("Movement from %s to %s in the %s (%s); the active area travels %s across about %d px. The region is the whole path swept, not the size of the thing moving.",
 			clock(e.Start), clock(e.End), e.Position, size, e.Direction, e.TravelPixels)
 	default:
-		if e.RegionArea > 0.6 {
+		if e.RegionArea > frameWideArea {
 			return fmt.Sprintf("Most of the frame (%s) is changing continuously from %s to %s. This is whole-frame motion rather than one localised event; its start and end are where activity crossed the noise floor, not real boundaries.",
 				size, clock(e.Start), clock(e.End))
 		}
@@ -211,19 +195,19 @@ func wholeFrameSummary(e Event) string {
 
 // groupSample reduces one transition to what this group of cells saw.
 func (a *Analyzer) groupSample(i int, g group) (changed, drift float64, box image.Rectangle, centre image.Point) {
-	t := g.timescale()
+	t := g.scale
 	var count, driftCount int32
 	var weightX, weightY, weight float64
 	for _, c := range g.cells {
 		cell := a.samples[i].Cells[c]
-		count += cell.Changed
-		driftCount += cell.Drift
-		b := t.box(cell)
+		count += cell.Count(fast)
+		driftCount += cell.Count(slow)
+		b := cell.Box(t)
 		if b.Empty() {
 			continue
 		}
 		box = box.Union(b)
-		w := float64(t.count(cell))
+		w := float64(cell.Count(t))
 		weightX += float64(b.Min.X+b.Max.X) / 2 * w
 		weightY += float64(b.Min.Y+b.Max.Y) / 2 * w
 		weight += w
@@ -236,9 +220,9 @@ func (a *Analyzer) groupSample(i int, g group) (changed, drift float64, box imag
 }
 
 func (a *Analyzer) groupActive(i int, g group, floors []float64) bool {
-	t := g.timescale()
+	t := g.scale
 	for _, c := range g.cells {
-		if a.cellMeasure(t, i, c) > floors[c] {
+		if a.cellFraction(i, c, t) > floors[c] {
 			return true
 		}
 	}

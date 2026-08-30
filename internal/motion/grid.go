@@ -5,28 +5,31 @@ import "image"
 // Cell is one grid cell's contribution to one transition. Counts are pixels;
 // the box bounds the changed pixels inside the cell, in analysis coordinates.
 type Cell struct {
-	Changed                    int32
-	Drift                      int32
-	MinX, MinY, MaxX, MaxY     int16
-	DMinX, DMinY, DMaxX, DMaxY int16
+	// M holds one entry per timescale. An array rather than two named field
+	// groups: the fast and slow views are two instances of one thing, and
+	// writing them out separately meant every reader re-decided which it wanted.
+	M [timescales]measure
 }
 
-// Box returns the changed area within the cell, empty when nothing changed.
-func (c Cell) Box() image.Rectangle {
-	if c.Changed == 0 {
-		return image.Rectangle{}
-	}
-	return image.Rect(int(c.MinX), int(c.MinY), int(c.MaxX)+1, int(c.MaxY)+1)
+// measure is one timescale's view of a cell: how many pixels differed and the
+// bounds of where.
+type measure struct {
+	Count                  int32
+	MinX, MinY, MaxX, MaxY int16
 }
 
-// DriftBox is the same for the slow timescale, which is the only bound a
-// gradual change has: it never registers as a fast change at all.
-func (c Cell) DriftBox() image.Rectangle {
-	if c.Drift == 0 {
+// Box returns the changed area within the cell on one timescale, empty when
+// nothing changed on it.
+func (c Cell) Box(t timescale) image.Rectangle {
+	m := c.M[t]
+	if m.Count == 0 {
 		return image.Rectangle{}
 	}
-	return image.Rect(int(c.DMinX), int(c.DMinY), int(c.DMaxX)+1, int(c.DMaxY)+1)
+	return image.Rect(int(m.MinX), int(m.MinY), int(m.MaxX)+1, int(m.MaxY)+1)
 }
+
+// Count is the pixel count on one timescale.
+func (c Cell) Count(t timescale) int32 { return c.M[t].Count }
 
 // Grid describes the spatial decomposition used for segmentation.
 type Grid struct {

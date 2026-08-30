@@ -30,6 +30,16 @@ type Assessment struct {
 	Advice         string  `json:"advice,omitempty"`
 }
 
+// Thresholds separating a fixed viewport from footage that never holds still.
+// They answer different questions and are deliberately not unified: one is how
+// long the whole frame is in motion, the other how much of it moves at once.
+const (
+	poorGlobalMotion      = 0.5
+	marginalGlobalMotion  = 0.2
+	poorTypicalChange     = 0.25
+	marginalTypicalChange = 0.06
+)
+
 // assess judges whether this recording is the kind the tool works on.
 //
 // The question is not "is anything moving" — a heartbeat makes that true of any
@@ -62,13 +72,13 @@ func assess(events []Event, samples []Sample, span float64) Assessment {
 	global = round4(global)
 
 	switch {
-	case global > 0.5 || typical > 0.25:
+	case global > poorGlobalMotion || typical > poorTypicalChange:
 		return Assessment{
 			Verdict: FitPoor, GlobalMotion: global, TypicalChanged: typical,
 			Reason: fmt.Sprintf("Change covers most of the frame for %.0f%% of the interval. Something keeps the whole picture moving — a camera pan or zoom, a scroll, or ambient motion such as wind, water, fire, a crowd or film grain — rather than a fixed viewport with discrete changes.", global*100),
 			Advice: "Do not read the events below as a list of findings: where everything moves, the small ones are fragments of one moving scene and their boundaries are arbitrary. Use 'sheet' and 'frames' to look at the content instead.",
 		}
-	case global > 0.2 || typical > 0.06:
+	case global > marginalGlobalMotion || typical > marginalTypicalChange:
 		return Assessment{
 			Verdict: FitMarginal, GlobalMotion: global, TypicalChanged: typical,
 			Reason: fmt.Sprintf("Change covers most of the frame for %.0f%% of the interval, which is a lot for a fixed viewport.", global*100),

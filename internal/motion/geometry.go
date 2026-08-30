@@ -39,7 +39,9 @@ func positionOf(r [4]int, opt TimelineOptions) string {
 		return "frame"
 	}
 	w, h := float64(opt.SourceWidth), float64(opt.SourceHeight)
-	if float64(r[2]-r[0]) > 0.7*w && float64(r[3]-r[1]) > 0.7*h {
+	// A box spanning most of both axes has no useful position to name.
+	const spansFrame = 0.7
+	if float64(r[2]-r[0]) > spansFrame*w && float64(r[3]-r[1]) > spansFrame*h {
 		return "whole frame"
 	}
 	cx := (float64(r[0]) + float64(r[2])) / 2 / w

@@ -264,16 +264,20 @@ func (a *Analyzer) drift(f video.Frame, s *Sample) {
 	}
 	s.Drift = float64(count) / float64(a.pixels)
 	for i := range s.Cells {
-		s.Cells[i].Drift = cells[i].Changed
-		s.Cells[i].DMinX, s.Cells[i].DMinY = cells[i].MinX, cells[i].MinY
-		s.Cells[i].DMaxX, s.Cells[i].DMaxY = cells[i].MaxX, cells[i].MaxY
+		// The comparison wrote into the fast slot of a scratch cell; the winner
+		// becomes this sample's slow view.
+		s.Cells[i].M[slow] = cells[i].M[fast]
 	}
 }
 
 // resetBounds prepares cells so the first changed pixel sets both bounds.
 func resetBounds(cells []Cell) {
+	empty := Cell{}
+	for t := range empty.M {
+		empty.M[t] = measure{MinX: math.MaxInt16, MinY: math.MaxInt16, MaxX: -1, MaxY: -1}
+	}
 	for i := range cells {
-		cells[i] = Cell{MinX: math.MaxInt16, MinY: math.MaxInt16, MaxX: -1, MaxY: -1}
+		cells[i] = empty
 	}
 }
 
@@ -296,12 +300,13 @@ func (a *Analyzer) compare(current, reference []byte, cells []Cell) int {
 
 // mark records a changed pixel against its grid cell. The index arithmetic has
 // to agree with Grid.Bounds for regions to be right, so it is written once.
+// It always writes the fast slot; the drift pass moves its result across.
 func (a *Analyzer) mark(cells []Cell, p int) {
 	x, y := p%a.width, p/a.width
-	c := &cells[(y*a.grid.Rows/a.height)*a.grid.Cols+(x*a.grid.Cols/a.width)]
-	c.Changed++
-	c.MinX, c.MinY = minI16(c.MinX, int16(x)), minI16(c.MinY, int16(y))
-	c.MaxX, c.MaxY = maxI16(c.MaxX, int16(x)), maxI16(c.MaxY, int16(y))
+	m := &cells[(y*a.grid.Rows/a.height)*a.grid.Cols+(x*a.grid.Cols/a.width)].M[fast]
+	m.Count++
+	m.MinX, m.MinY = minI16(m.MinX, int16(x)), minI16(m.MinY, int16(y))
+	m.MaxX, m.MaxY = maxI16(m.MaxX, int16(x)), maxI16(m.MaxY, int16(y))
 }
 
 // Frames is the number of frames folded in.

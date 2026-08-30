@@ -21,10 +21,9 @@ type ProjectionResult struct {
 
 // WriteProjection renders the activity image for a completed analysis.
 func (e *Engine) WriteProjection(a *Analysis, path string, annotate bool) (*ProjectionResult, error) {
-	analyzer := a.Analyzer()
-	omitted, short := omissions(a, analyzer.Ignored())
-	img := render.Projection(analyzer.Pixels(), render.ProjectionOptions{
-		Transitions: analyzer.Accumulated(),
+	omitted, short := omissions(a, a.image.ignored)
+	img := render.Projection(a.image.stats, render.ProjectionOptions{
+		Transitions: a.image.transitions,
 		Annotate:    annotate,
 		Caption:     fmt.Sprintf("%s  %.2f-%.2fs", filepath.Base(a.Input), a.Params.Start, a.Params.End),
 		Omitted:     short,
@@ -42,7 +41,7 @@ func (e *Engine) WriteProjection(a *Analysis, path string, annotate bool) (*Proj
 			"black": "no change above the threshold at that pixel",
 			"alpha": "always opaque, so the black background is real black rather than transparency",
 		},
-		Excluded: analyzer.Ignored(),
+		Excluded: a.image.ignored,
 		Omitted:  omitted,
 		HowToRead: "Every pixel keeps its source x,y. This is an activity map, not a picture of the video — " +
 			"use it to find where and when to look, then read the events and pull real frames. " +
