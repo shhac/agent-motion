@@ -104,6 +104,45 @@ loads — chosen for content shift, with stable controls alongside — into
 `.cache/eval/real/`. It is written to be handed to a tool that does not have
 `agent-motion` at all.
 
+## What real recordings changed
+
+Eight real page loads were captured headlessly — Forbes, CNN, AllRecipes, the
+Guardian, the Independent, ESPN, plus Wikipedia and Hacker News as stable
+controls — at 1280x800 with a cold cache, and transcoded to constant frame
+rate. Three things came out of them that no synthetic fixture could have shown.
+
+**The false positives were all compression noise.** A static Wikipedia article
+produced seven events. Measured with `compare`, the worst was 31 pixels of
+1,024,000 differing, scattered across a 949x557 box — lossy encoding, not the
+page. Real recordings are lossily compressed and synthetic ones rendered from
+clean sources, so the fixtures could never have surfaced this.
+
+The fix is density: something that genuinely changed is solid within its own
+bounds, while codec noise is a scatter across a large box. As a ratio of two
+frame fractions it holds at any resolution, where a pixel count would not. It
+took Wikipedia from seven events to two and left every fixture untouched.
+
+Two things were tried and rejected on the evidence. Raising the per-cell pixel
+floor made real pages *worse*, fragmenting runs into more and shorter events,
+and broke a fixture at eight pixels. Extending shift detection to whole-frame
+changes found nothing at all.
+
+**A real page re-layout is not a translation.** The dominant change on a real
+load — the moment the article re-flows — registers as a whole-frame `cut`, and
+correlating it finds no displacement, because content re-wraps and resizes
+rather than sliding. The layout fixture, solid blocks translating exactly, is
+not representative of that case. Shift measurement works, and is demonstrated
+to the pixel on the fixtures and on the player scenario, but on these eight
+pages it fired only on trivia. That is a real limit, not a tuning problem.
+
+**No shifts were invented.** Across eight real recordings the tool reported no
+false layout shift, and the two controls reported none at all. Conservative is
+the right direction to fail in.
+
+The captures also demonstrated the trap the capture instructions warn about:
+Playwright records variable frame rate, and it had to be transcoded before any
+of this was trustworthy.
+
 ## Agent trials
 
 The tool is for agents, so it is tested by giving agents a video and no context

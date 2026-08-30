@@ -32,7 +32,7 @@ Get these wrong and the recording is unusable. They are not stylistic.
 
 | Setting | Value | Why |
 |---|---|---|
-| **Frame rate** | **30 fps constant (CFR)** — 60 if easy | Variable frame rate is the single worst failure. Screen recorders default to VFR, which drops frames when the screen is still — exactly the stillness the analysis measures. Every timestamp then drifts. If your recorder only does VFR, transcode after: `ffmpeg -i in.mp4 -vsync cfr -r 30 -c:v libx264 -crf 18 -pix_fmt yuv420p out.mp4` |
+| **Frame rate** | **30 fps constant (CFR)** — 60 if easy | Variable frame rate is the single worst failure. Screen recorders default to VFR, which drops frames when the screen is still — exactly the stillness the analysis measures. Every timestamp then drifts. If your recorder only does VFR, transcode after: `ffmpeg -i in.mp4 -fps_mode cfr -r 30 -c:v libx264 -crf 18 -pix_fmt yuv420p out.mp4` (on ffmpeg 6 and older, `-vsync cfr` instead of `-fps_mode cfr`) |
 | **Region** | **The page viewport only** | Not the whole desktop, ideally not browser chrome. A loading spinner in the tab, a blinking cursor in the URL bar, or a menu bar clock are all "activity" and will be reported as findings. |
 | **Window size** | **1280×800**, fixed, and never resized mid-capture | Coordinates in the results are source pixels. A resize invalidates every one. |
 | **Cursor** | **Do not capture it, or park it in a corner and do not move it** | A moving cursor is genuine on-screen motion and will dominate the results. |

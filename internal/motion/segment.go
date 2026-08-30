@@ -70,7 +70,11 @@ func (a *Analyzer) cellFloors(minimum float64) []float64 {
 			series[i] = float64(s.Cells[c].Count(fast)) / float64(a.grid.Pixels[c])
 		}
 		// Two changed pixels is the smallest thing worth calling an event; one
-		// is indistinguishable from a single noisy pixel.
+		// is indistinguishable from a single noisy pixel. Raising it does not
+		// help against compression noise and actively hurts: measured across
+		// four fixtures and four real page loads, a higher floor fragments runs
+		// into more, shorter events rather than removing them. Scattered noise
+		// is rejected by density instead, in scattered().
 		floors[c] = math.Max(robustFloor(series, minimum), 2/float64(a.grid.Pixels[c]))
 	}
 	return floors

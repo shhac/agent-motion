@@ -93,7 +93,11 @@ func (a *Analyzer) describe(g group, floors []float64, opt TimelineOptions) (Eve
 	if g.scale == slow {
 		return a.gradualEvent(e, opt), true
 	}
-	return a.fastEvent(e, stats, opt), true
+	e = a.fastEvent(e, stats, opt)
+	if scattered(e) {
+		return Event{}, false
+	}
+	return e, true
 }
 
 // gradualEvent finishes a slow-timescale event. Drift reports a change one
@@ -130,6 +134,27 @@ func (a *Analyzer) fastEvent(e Event, stats groupStats, opt TimelineOptions) Eve
 // frameWideArea is the share of the frame above which an event stops being
 // something that happened somewhere and becomes something happening everywhere.
 const frameWideArea = 0.6
+
+// minDensity is the share of its own region an event must actually fill.
+// Calibrated in TestDensitySeparatesChangeFromCodecNoise: a static Wikipedia
+// article re-encoded to mp4 produces blips of density 0.0002, while the
+// smallest real change in any fixture — a 2px card edge sliding — is 0.03.
+const minDensity = 0.01
+
+// scattered rejects a brief event whose changed pixels are spread thinly across
+// its own region, which is what lossy compression looks like and what anything
+// genuinely changing does not. Something real is solid within its bounds; codec
+// noise is a handful of stray pixels across a large box.
+//
+// The test is a ratio of two fractions of the frame, so it holds at any
+// resolution — a pixel count cannot, and a static page re-encoded at a higher
+// resolution would sail past one.
+func scattered(e Event) bool {
+	if e.Kind != KindStep && e.Kind != KindBlip {
+		return false // sustained and travelling events are legitimately diffuse
+	}
+	return e.RegionArea > 0 && e.PeakChanged/e.RegionArea < minDensity
+}
 
 // wholeFrame reports an event large enough that calling it localised would
 // mislead. Steps and blips are exempt: a one-off whole-frame change is a real,

@@ -65,6 +65,11 @@ as moving, or the region was too small or too featureless to register against.
 - **An event is not a thing.** It is a region of pixels that changed together.
   One moving object can be several events; several objects moving together are
   one event.
+- **A lossily compressed recording carries noise.** Measured on real screen
+  captures: tens of pixels differ between any two frames of a static page, at
+  up to 40/255. Scattered change is filtered out, but if a recording is heavily
+  compressed and you are seeing events you cannot explain, raise `--threshold`
+  to 20 or more and see which survive.
 - **`region_xyxy` is a bounding box of change**, not an outline. A small object
   crossing the frame produces a box spanning its whole path.
 - **Nothing found is not nothing happened.** Check `limits`. Re-run with

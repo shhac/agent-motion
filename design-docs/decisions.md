@@ -24,6 +24,29 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D24 — Density, not size, separates change from compression noise
+
+A static Wikipedia article, recorded and re-encoded, produced seven events. The
+worst was 31 pixels of 1,024,000 differing, scattered across a 949x557 box.
+Synthetic fixtures are rendered from clean sources and could never have shown
+this; it took real recordings.
+
+A brief event is now rejected when its changed pixels fill less than 1% of the
+region they span. Something that genuinely changed is solid within its bounds —
+a 2px card edge sliding measures 0.03, a badge appearing 1.0 — while codec noise
+measures 0.0002. Two orders of magnitude apart, and expressed as a ratio of two
+frame fractions it holds at any resolution, where a pixel count would not.
+
+Only brief events are judged this way. Movement and sustained activity are
+legitimately diffuse: a small object crossing the frame covers a large region
+while changing little of it at any instant.
+
+Two alternatives were tried and rejected on the evidence. Raising the per-cell
+pixel floor made real pages worse — it fragments runs into more, shorter events
+rather than removing them — and broke a fixture. Applying the density test per
+cell did nothing, because a couple of adjacent noise pixels look perfectly dense
+inside one cell; the scatter is only visible across the whole region.
+
 ## D23 — Check turns the analysis into a pass or fail
 
 Finding a regression is only half of catching one. `check` asserts conditions

@@ -261,6 +261,11 @@ func asShift(e Event, region image.Rectangle, moved Displacement, opt TimelineOp
 
 // brieflyChangedOrder lists the candidate events, most prominent first, so a
 // capped budget is spent on the changes that matter most.
+//
+// Whole-frame changes are deliberately not candidates. Tried against eight real
+// page loads, a browser re-layout never registered as a translation — content
+// re-wraps and resizes rather than sliding — so including them found nothing
+// and spent the frame budget ahead of the smaller events that do translate.
 func brieflyChangedOrder(events []Event) []int {
 	var order []int
 	for i, e := range events {

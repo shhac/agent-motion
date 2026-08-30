@@ -10,8 +10,14 @@ import (
 // Overview is the orientation layer: what the whole interval looks like before
 // an agent reads individual events.
 type Overview struct {
-	Narrative     string       `json:"narrative"`
-	Busiest       float64      `json:"busiest_seconds"`
+	Narrative string  `json:"narrative"`
+	Busiest   float64 `json:"busiest_seconds"`
+	// Settled is when the last change finished, so a recording of something
+	// loading says how long it took to stop moving. It is nil when the
+	// recording ended while things were still changing.
+	Settled *float64 `json:"settled_at_seconds,omitempty"`
+	// StillChanging says the recording ran out before anything settled.
+	StillChanging bool         `json:"still_changing_at_end,omitempty"`
 	Quiet         [][2]float64 `json:"quiet_ranges,omitempty"`
 	BucketSeconds float64      `json:"bucket_seconds,omitempty"`
 	Sparkline     string       `json:"activity_sparkline,omitempty"`
@@ -36,6 +42,7 @@ func (a *Analyzer) Overview(t Timeline, buckets int) Overview {
 		o.BucketSeconds = round2((end - start) / float64(len(o.Activity)))
 		o.Sparkline, o.PeakBucket = sparkline(o.Activity)
 	}
+	o.Settled, o.StillChanging = settledAt(t.Events, end)
 	o.Narrative = narrate(t, o, start, end)
 	return o
 }
@@ -62,6 +69,12 @@ func narrate(t Timeline, o Overview, start, end float64) string {
 		}
 	}
 	fmt.Fprintf(&b, "The busiest moment is %s. ", clock(o.Busiest))
+	switch {
+	case o.StillChanging:
+		b.WriteString("It was still changing when the recording ended, so whatever this is had not settled. ")
+	case o.Settled != nil:
+		fmt.Fprintf(&b, "Everything had settled by %s. ", clock(*o.Settled))
+	}
 	switch {
 	case len(o.Quiet) == 0:
 		b.WriteString("Something is changing throughout.")
@@ -252,4 +265,25 @@ func sparkline(values []float64) (string, float64) {
 		out[i] = ramp[min(len(ramp)-1, max(0, level))]
 	}
 	return string(out), round3(peak)
+}
+
+// settledAt reports when the last change finished. For a recording of something
+// loading, that is the useful number: how long until it stopped moving. A
+// recording that ends mid-change has not settled, and saying so is the point —
+// a load that is still shifting when the camera stops is worse news than one
+// that settled late.
+func settledAt(events []Event, end float64) (*float64, bool) {
+	if len(events) == 0 {
+		return nil, false
+	}
+	last := 0.0
+	for _, e := range events {
+		last = math.Max(last, math.Max(e.Start, e.End))
+	}
+	// Within a hair of the end means it never actually stopped.
+	if end-last < minQuiet {
+		return nil, true
+	}
+	value := round2(last)
+	return &value, false
 }
