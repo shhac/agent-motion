@@ -52,9 +52,8 @@ type Sample struct {
 	Changed float64 `json:"changed_fraction"`
 	// Drift is the same measure against the frame DriftFrames earlier. It is
 	// the only signal that sees a fade.
-	Drift  float64 `json:"drift_fraction"`
-	Energy float64 `json:"energy"`
-	Cells  []Cell  `json:"-"`
+	Drift float64 `json:"drift_fraction"`
+	Cells []Cell  `json:"-"`
 }
 
 // PixelStats are the per-pixel accumulations behind the projection image.
@@ -177,13 +176,11 @@ func (a *Analyzer) Add(f video.Frame) error {
 func (a *Analyzer) difference(f video.Frame) Sample {
 	cells := make([]Cell, len(a.grid.Pixels))
 	resetBounds(cells)
-	var energy float64
 	a.changedIndex = a.changedIndex[:0]
 
 	for p := 0; p < a.pixels; p++ {
 		i := p * 3
 		delta := pixelDelta(f.Pix, a.previous, i)
-		energy += delta
 		if delta <= a.opt.Threshold {
 			continue
 		}
@@ -195,7 +192,6 @@ func (a *Analyzer) difference(f video.Frame) Sample {
 	s := Sample{
 		Index: len(a.samples), Time: f.Time,
 		Changed: float64(len(a.changedIndex)) / float64(a.pixels),
-		Energy:  energy / float64(a.pixels),
 		Cells:   cells,
 	}
 	return s
@@ -319,9 +315,6 @@ func (a *Analyzer) Ignored() []float64 { return a.ignored }
 
 // Span returns the first and last frame timestamps seen.
 func (a *Analyzer) Span() (float64, float64) { return a.start, a.end }
-
-// Samples returns the per-transition series.
-func (a *Analyzer) Samples() []Sample { return a.samples }
 
 // Pixels returns the per-pixel accumulations for image rendering.
 func (a *Analyzer) Pixels() PixelStats {

@@ -30,12 +30,6 @@ const (
 	CutFraction = 0.5
 )
 
-// Source describes the input file.
-type Source struct {
-	Path string `json:"path"`
-	video.Info
-}
-
 // Params records exactly how the analysis was performed, so a result can be
 // reproduced and so an agent can tell which knob to turn next.
 type Params struct {

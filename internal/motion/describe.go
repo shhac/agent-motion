@@ -31,10 +31,10 @@ func (t timescale) box(c Cell) image.Rectangle {
 }
 
 func (a *Analyzer) cellMeasure(t timescale, i, c int) float64 {
-	if t == slow {
-		return a.cellDrift(i, c)
+	if t == fast {
+		return a.cellChanged(i, c)
 	}
-	return a.cellChanged(i, c)
+	return a.cellDrift(i, c)
 }
 
 // groupStats is everything one pass over a group's samples establishes. Keeping
