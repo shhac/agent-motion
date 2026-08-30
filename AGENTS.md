@@ -26,7 +26,12 @@ they are not the product. See `design-docs/vision.md`.
 - An image must state what it leaves out, in the image. Disclosing it only in
   metadata is how a reader concludes nothing happened where plenty did.
 - Event kinds name the *shape* of a change, never its meaning. Do not add a
-  kind that asserts what something is.
+  kind that asserts what something is. `shift` is the one kind that says what
+  happened to the content — the same pixels in a new place — and it is only
+  ever set from measurement, never inferred.
+- `check` thresholds are opt-in. An unset flag must assert nothing: a zero
+  default that silently becomes the strictest possible check would fail every
+  run for a reason nobody chose.
 - Never present an activity image as a reconstruction or as ground truth. Its
   encoding is lossy and is returned in `encoding`.
 - Preserve pixel coordinates. Do not resize, crop, stabilise or register frames

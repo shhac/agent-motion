@@ -87,6 +87,7 @@ var kindNouns = map[string][2]string{
 	KindGradual: {"gradual change", "gradual changes"},
 	KindBusy:    {"stretch of sustained activity", "stretches of sustained activity"},
 	KindStall:   {"stall where continuous activity stopped", "stalls where continuous activity stopped"},
+	KindShift:   {"layout shift", "layout shifts"},
 }
 
 func countKinds(events []Event) string {

@@ -19,7 +19,7 @@ func main() {
 	truth := flag.String("truth", "", "Optional ground-truth JSON destination")
 	ffmpegPath := flag.String("ffmpeg", "ffmpeg", "FFmpeg executable")
 	crf := flag.Int("crf", 20, "x264 constant rate factor; 0 is lossless")
-	name := flag.String("scenario", "reference", "Scenario to render: reference, defect or player")
+	name := flag.String("scenario", "reference", "Scenario to render: reference, defect, player or layout")
 	flag.Parse()
 
 	s, err := scenario(*name)
@@ -49,6 +49,8 @@ func scenario(name string) (fixture.Scenario, error) {
 		return fixture.Defect(), nil
 	case "player":
 		return fixture.Player(), nil
+	case "layout":
+		return fixture.Layout(), nil
 	default:
 		return fixture.Scenario{}, fmt.Errorf("unknown scenario %q", name)
 	}

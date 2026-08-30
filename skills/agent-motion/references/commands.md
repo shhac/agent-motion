@@ -89,6 +89,25 @@ Cropping happens before scaling, so `--region 200,120,202,160 --pad 24 --width
 480` returns that region enlarged rather than a shrunken whole frame. This is
 how you look at something too small to see in a full-frame still.
 
+## `check <video>`
+
+Asserts conditions and exits non-zero if they fail. Takes every shared analysis
+flag, plus:
+
+| Flag | Meaning |
+|---|---|
+| `--max-shift-score` | Fail if any layout shift scores above this. |
+| `--max-shift-pixels` | Fail if content moves further than this many pixels. |
+| `--no-shift` | Fail if any content moves at all. |
+| `--no-stall` | Fail if continuous activity stops and resumes. |
+| `--no-flicker` | Fail if anything toggles repeatedly. |
+| `--quiet` | Fail if anything changes at all. |
+
+The verdict goes to stdout with every assertion, its limit, the worst value
+seen, and the event that broke it. A one-line failure goes to stderr. Thresholds
+are opt-in: an unset flag asserts nothing, so a zero default never silently
+becomes the strictest possible check.
+
 ## `compare <video>`
 
 Measures two arbitrary timestamps against each other.

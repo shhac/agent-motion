@@ -55,6 +55,7 @@ func newRoot(version string, dec video.Decoder) *cobra.Command {
 	root.AddCommand(
 		inspectCommand(g),
 		timelineCommand(g),
+		checkCommand(g),
 		projectCommand(g),
 		framesCommand(g),
 		sheetCommand(g),

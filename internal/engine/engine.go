@@ -140,10 +140,18 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 		return nil, output.New("the selected interval decoded fewer than two frames", output.FixableByAgent).
 			WithHint(fmt.Sprintf("widen the interval; at %.3g fps you need at least %.3fs", opt.SampleFPS, 2/opt.SampleFPS))
 	}
-	timeline := analyzer.Timeline(motion.TimelineOptions{
+	timelineOptions := motion.TimelineOptions{
 		FPS: opt.SampleFPS, SourceWidth: info.Width, SourceHeight: info.Height,
 		DriftSeconds: opt.DriftSeconds, CutFraction: CutFraction, MaxEvents: opt.MaxEvents,
-	})
+	}
+	timeline := analyzer.Timeline(timelineOptions)
+	// Whether a brief change was content moving or content appearing needs the
+	// frames themselves, so it happens here rather than in the analysis pass —
+	// and before the narrative is written, which counts the kinds.
+	if timeline.Fit.Verdict != motion.FitPoor {
+		timeline.Events = motion.ResolveShifts(timeline.Events, timelineOptions,
+			opt.SampleFPS, e.frameAt(ctx, opt.Path))
+	}
 	overview := analyzer.Overview(timeline, opt.Buckets)
 	if !opt.Series {
 		overview.Activity = nil

@@ -11,6 +11,7 @@ fixtures:
 	@$(MAKE) fixture SCENARIO=reference
 	@$(MAKE) fixture SCENARIO=defect
 	@$(MAKE) fixture SCENARIO=player
+	@$(MAKE) fixture SCENARIO=layout
 
 test:
 	GOCACHE=$(GOCACHE) go test ./... -count=1

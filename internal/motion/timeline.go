@@ -15,6 +15,7 @@ const (
 	KindGradual = "gradual" // too slow to see frame to frame, clear over the drift window
 	KindBusy    = "busy"    // sustained activity with no clearer shape
 	KindStall   = "stall"   // activity that was running continuously stopped, then resumed
+	KindShift   = "shift"   // content moved to a new position rather than appearing or changing
 )
 
 // Event is one described occurrence in source-video coordinates and seconds.
@@ -41,6 +42,13 @@ type Event struct {
 	// the movement around it.
 	JumpPixels  int     `json:"jump_backwards_pixels,omitempty"`
 	JumpSeconds float64 `json:"jump_backwards_seconds,omitempty"`
+	// MovedBy is the displacement of the content, in source pixels, when the
+	// change was a translation rather than an appearance. Positive Y is down.
+	MovedBy [2]int `json:"moved_by_pixels,omitempty"`
+	// ShiftScore is CLS-shaped: the share of the frame affected multiplied by
+	// how far it moved as a share of the frame. It is not Chrome's Cumulative
+	// Layout Shift, which is measured from the DOM over a session window.
+	ShiftScore float64 `json:"layout_shift_score,omitempty"`
 	// Persists reports whether the region still looks different afterwards.
 	// It is nil when there was no checkpoint to compare against.
 	Persists *bool  `json:"persists,omitempty"`

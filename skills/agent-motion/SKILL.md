@@ -93,6 +93,47 @@ agent-motion frames recording.mp4 --at 6.2 --region 200,120,202,160 \
 works on `sheet` too, which then crops every tile the same way — the fastest
 way to watch one small element change over time.
 
+## Content shift
+
+A `shift` is the one kind that says *what happened to the content*, not just
+that it changed. It means the pixels that were there are still there, somewhere
+else — which on a web page separates a bug from the page working normally.
+
+```json
+"kind": "shift", "moved_by_pixels": [0, 40], "layout_shift_score": 0.0275
+```
+
+`moved_by_pixels` is the displacement in source pixels, positive Y down,
+measured from the two real frames either side of the transition rather than
+from the downscaled analysis, so it is exact. `layout_shift_score` is the share
+of the frame affected times how far it went. It is CLS-*shaped* and is not
+Chrome's Cumulative Layout Shift, which comes from the DOM, covers a session
+window, and knows which elements are unstable. Use it to rank and to threshold,
+not to report a Core Web Vital.
+
+The tool cannot tell you *which element* moved or *why* — that needs the DOM.
+For a live page you control, `PerformanceObserver` with `layout-shift` entries
+is the better tool. This one is for when you have a recording and not the page.
+
+## Testing a recording
+
+```sh
+agent-motion check recording.mp4 --max-shift-score 0.05 --no-stall
+```
+
+Turns the analysis into a pass or fail and exits non-zero on failure, so a
+visual regression can break a build rather than waiting to be noticed. Every
+threshold is opt-in — with none given it asserts nothing and says so, rather
+than implying it looked and approved. Each failed assertion names the event
+that broke it.
+
+`--max-shift-score`, `--max-shift-pixels`, `--no-shift`, `--no-stall`,
+`--no-flicker`, `--quiet`.
+
+If the recording is one the tool cannot judge — a scroll, a pan, ambient motion
+— the result says so in `notes`. A pass on footage like that means nothing, and
+it will tell you.
+
 ## Ask whether something is the same as it was
 
 ```sh
@@ -138,6 +179,7 @@ subtle rendering instability, so lowering it is the standard second move.
 | `gradual` | too slow to see between frames; found over the `--drift` window |
 | `busy` | sustained activity with no clearer shape |
 | `stall` | activity that was running continuously stopped, then resumed |
+| `shift` | the same content in a new place — it moved rather than appearing |
 
 Kinds describe the **shape** of a change, never its meaning. A `step` might be a
 button appearing, a tooltip closing, or a value updating — pull the frames.

@@ -27,6 +27,8 @@
 | `region_area_fraction` | That box as a fraction of the frame. |
 | `position` | The third of the frame it sits in, e.g. `bottom right`. |
 | `persists` | Whether the region still looks different afterwards. Absent when it could not be compared. |
+| `moved_by_pixels` | Set on a `shift`: how far the content moved, in source pixels, positive Y down. Measured from the real frames either side, so it is exact regardless of `--analysis-width`. |
+| `layout_shift_score` | Share of the frame affected times how far it moved. CLS-shaped, not Chrome's CLS. Use it to rank and threshold. |
 | `direction`, `travel_pixels` | Set when the active centre moves. |
 | `jump_backwards_pixels`, `jump_backwards_seconds` | Set when the movement reverses once — a progress bar regressing, a scroll resetting, a carousel snapping back. The movement is usually expected; the jump is usually the bug. |
 | `changes_per_second` | Set for `flicker`. Counts changes, so a full on-off cycle is two. |
@@ -44,6 +46,19 @@
 | `identical: true` | Not one pixel differs. The frames are byte-for-byte the same picture. |
 | `identical: false`, `changed_pixels: 0` | Nothing clears the threshold. On a lossy codec this is what "unchanged" actually looks like; `max_pixel_delta` tells you how far off it is. |
 | `changed_pixels > 0` | Real difference. `differs_within_xyxy` bounds it in source coordinates. |
+
+## Shift versus step
+
+`step` and `shift` are both a one-off change that stays. The difference is what
+happened to the content:
+
+- **`step`** — something appeared, vanished, or changed. New pixels.
+- **`shift`** — the same pixels, in a new place. It moved.
+
+Only the second is a layout shift. Distinguishing them needs the actual frames,
+so it happens in a second pass and is skipped when the recording is unsuitable.
+A `step` where you expected a `shift` usually means the content changed as well
+as moving, or the region was too small or too featureless to register against.
 
 ## What a result does not mean
 

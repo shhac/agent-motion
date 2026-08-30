@@ -62,6 +62,7 @@ Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
 | `project` | one full-res pass | The timeline plus an activity-map PNG. |
 | `frames` | one still each | Real source frames at chosen timestamps, croppable. |
 | `compare` | two stills | Exactly how two moments differ, with the difference drawn. |
+| `check` | one pass | Asserts conditions and exits non-zero, so a regression breaks a build. |
 
 `agent-motion mcp` serves the same commands over MCP, so a client that speaks
 MCP rather than a shell gets an identical surface.

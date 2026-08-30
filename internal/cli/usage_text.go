@@ -10,6 +10,7 @@ WHAT IT IS FOR
 COMMANDS
   inspect <video>    Dimensions, frame rate, duration, codec. Decodes nothing.
   timeline <video>   What changes and when: narrative, events, quiet stretches.
+  check <video>      Assert conditions and exit non-zero if they fail.
   sheet <video>      One image of many labelled frames. Shows what it looks like.
   project <video>    Timeline plus an activity-map PNG in source coordinates.
   frames <video>     Write real source frames at chosen timestamps.
@@ -29,6 +30,20 @@ WATCHING ONE EVENT UNFOLD
   An event's start and end do not say what a toggle or a drift looks like.
   Paste the event's own span back in and the samples are spaced for you.
   --during works on frames too.
+
+CONTENT SHIFT
+  A 'shift' is content that moved rather than content that appeared, which on
+  a page is the difference between a bug and the page working. moved_by_pixels
+  is the displacement in source pixels, positive Y down, measured from the two
+  real frames either side. layout_shift_score is the share of the frame
+  affected times how far it went — CLS-shaped, but not Chrome's CLS, which
+  comes from the DOM and knows which elements are unstable.
+
+TESTING A RECORDING
+  agent-motion check clip.mp4 --max-shift-score 0.05 --no-stall
+  Exits non-zero if an assertion fails, so a visual regression can break a
+  build. Every threshold is opt-in; with none given nothing is asserted and
+  the result says so. Each failure names the event that broke it.
 
 IS IT THE SAME AS IT WAS?
   agent-motion compare clip.mp4 --at 14.9,18.5
@@ -53,6 +68,7 @@ EVENT KINDS
   blip     brief localised change that reverts
   flicker  the same area toggles repeatedly; changes_per_second is reported
   motion   activity whose centre travels; direction and distance are reported
+  shift    the same content in a new place; moved_by_pixels says how far
   gradual  too slow to see between frames, found over the --drift window
   busy     sustained activity with no clearer shape
   stall    activity that was running continuously stopped, then resumed. This

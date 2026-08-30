@@ -2,12 +2,14 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/png"
 	"slices"
 	"strings"
 
+	"github.com/shhac/agent-motion/internal/motion"
 	"github.com/shhac/agent-motion/internal/video"
 	output "github.com/shhac/lib-agent-output"
 )
@@ -84,4 +86,19 @@ func orElse(width, source int) int {
 		return width
 	}
 	return source
+}
+
+// frameAt fetches one source frame, at full resolution, for questions the
+// analysis pass cannot answer from statistics alone.
+func (e *Engine) frameAt(ctx context.Context, path string) motion.FrameAt {
+	return func(at float64) (image.Image, error) {
+		if at < 0 {
+			return nil, output.New("timestamp before the start of the video", output.FixableByAgent)
+		}
+		raw, err := e.Decoder.Still(ctx, path, video.Still{At: at})
+		if err != nil {
+			return nil, err
+		}
+		return decodePNG(raw)
+	}
 }

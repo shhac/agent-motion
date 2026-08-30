@@ -2,6 +2,8 @@ package motion_test
 
 import (
 	"context"
+	"image"
+	"image/color"
 	"math"
 	"testing"
 
@@ -284,5 +286,84 @@ func TestFaultsSurviveAContinuouslyMovingElement(t *testing.T) {
 	}
 	if e := findNear(timeline.Events, 8, 0.3); e == nil {
 		t.Errorf("the progress bar jumping backwards at 8.00s was not found; got %v", kinds(timeline.Events))
+	}
+}
+
+// layoutTimeline runs the content-shift scenario end to end, including the
+// second pass that needs real frames.
+func layoutTimeline(t *testing.T) []motion.Event {
+	t.Helper()
+	s := fixture.Layout()
+	dec := s.Decoder()
+	a := motion.New(320, 240, motion.Options{
+		Threshold: 12, DriftFrames: 30, Checkpoints: 128, ExpectedFrames: s.Frames, IgnoreAbove: 0.5,
+	})
+	req := video.Request{Path: "layout", Width: 320, Height: 240, FPS: s.FPS}
+	if err := dec.Decode(context.Background(), req, a.Add); err != nil {
+		t.Fatal(err)
+	}
+	opt := motion.TimelineOptions{
+		FPS: s.FPS, SourceWidth: s.Width, SourceHeight: s.Height, DriftSeconds: 1, CutFraction: 0.5,
+	}
+	timeline := a.Timeline(opt)
+	return motion.ResolveShifts(timeline.Events, opt, s.FPS, func(at float64) (image.Image, error) {
+		return renderFrame(s, at), nil
+	})
+}
+
+// renderFrame draws the scenario at a timestamp, standing in for a decoder.
+func renderFrame(s fixture.Scenario, at float64) image.Image {
+	pix := make([]byte, s.Width*s.Height*3)
+	s.Frame(pix, int(math.Floor(at*s.FPS)))
+	img := image.NewRGBA(image.Rect(0, 0, s.Width, s.Height))
+	for p := 0; p < s.Width*s.Height; p++ {
+		i := p * 3
+		img.SetRGBA(p%s.Width, p/s.Width, color.RGBA{pix[i], pix[i+1], pix[i+2], 0xff})
+	}
+	return img
+}
+
+// TestContentShiftIsMeasuredNotJustDetected is the whole point of the shift
+// pass: an agent debugging a page needs "moved down 40px", not "something
+// changed here". Detecting the change was never the hard part.
+func TestContentShiftIsMeasuredNotJustDetected(t *testing.T) {
+	events := layoutTimeline(t)
+
+	want := []struct {
+		at   float64
+		down int
+	}{{2, 40}, {4, 24}}
+	for _, w := range want {
+		e := findNear(events, w.at, 0.3)
+		if e == nil || e.Kind != motion.KindShift {
+			t.Errorf("no shift at %.0fs; got %v", w.at, kinds(events))
+			continue
+		}
+		if e.MovedBy[1] != w.down || e.MovedBy[0] != 0 {
+			t.Errorf("shift at %.0fs measured %v, want [0 %d]", w.at, e.MovedBy, w.down)
+		}
+		if e.ShiftScore <= 0 {
+			t.Errorf("shift at %.0fs has no score", w.at)
+		}
+	}
+
+	// The badge appears without moving anything. Calling that a shift would
+	// make the whole distinction worthless.
+	if e := findNear(events, 6, 0.3); e == nil || e.Kind == motion.KindShift {
+		t.Errorf("the badge appearing at 6s should be reported, but not as a shift; got %+v", e)
+	}
+}
+
+// A larger displacement over a larger area must score higher, or the number is
+// not usable as a threshold.
+func TestShiftScoreRanksBySeverity(t *testing.T) {
+	events := layoutTimeline(t)
+	big, small := findNear(events, 2, 0.3), findNear(events, 4, 0.3)
+	if big == nil || small == nil {
+		t.Fatal("expected both shifts")
+	}
+	if big.ShiftScore <= small.ShiftScore {
+		t.Errorf("the 40px shift scored %.4f and the 24px shift %.4f; the larger must rank higher",
+			big.ShiftScore, small.ShiftScore)
 	}
 }

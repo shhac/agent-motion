@@ -24,6 +24,59 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D23 — Check turns the analysis into a pass or fail
+
+Finding a regression is only half of catching one. `check` asserts conditions
+and exits non-zero, so a visual regression can break a build rather than
+waiting to be noticed by someone reading JSON.
+
+Two decisions inside it. Every threshold is opt-in and an unset flag asserts
+nothing — otherwise a zero default silently becomes the strictest possible
+check, and every run fails for reasons nobody chose. And every failure carries
+the event that broke it, because a CI log saying only "failed" leaves whoever
+reads it exactly where they started.
+
+A verdict on footage the tool cannot judge says so in `notes`. A green build on
+a scrolling capture would otherwise mean nothing while looking like it meant
+something.
+
+## D22 — A shift is measured, not just detected
+
+Detecting content shift was never the hard part: a banner pushing an article
+down is one of the largest changes in a recording. The hard part is that
+"content appeared" and "content moved" are identical in the statistics — one
+transition, one region, persists afterwards — and on a page they are the
+difference between the site working and the site being broken.
+
+Telling them apart needs the pixels. The same content in a new place registers
+against itself at an offset; new content does not register at any offset. That
+is a registration problem, and correlating one-dimensional brightness profiles
+solves it at O(size + search) — which suits a page, being rows of text and
+stacked blocks with axis-aligned shifts.
+
+Three things fell out of building it:
+
+**Frames are fetched on demand, not retained during the pass.** The first
+attempt kept the frames of the largest transitions. That is exactly backwards:
+a 2px slide of a card is one of the *smallest* changes in a recording, and
+size-based retention threw away precisely the case the feature exists for. A
+second decode of the two frames either side is exact, needs no heuristic, and
+is measured at full resolution rather than at the analysis width — so the
+reported displacement is exact regardless of `--analysis-width`.
+
+**The gate belongs on absolute gain, not relative improvement.** An axis that
+did not move starts at almost zero difference, where "50% better" is noise, and
+correlating that flat signal invented an 18px sideways move on content that had
+only dropped. Measured: a genuine 2px slide gains 0.65 luminance units on its
+axis, an axis that did not move gains 0.00. The threshold sits at 0.25, between
+them, and a test asserts the separation still holds.
+
+**Two edges are one block.** Content sliding sideways changes only its two
+vertical edges, which are correctly separate events and separately unreadable —
+two hairlines with no explanation. Brief events sharing an instant are now
+tried together, and the defect scenario's 2px card jitter went from two mystery
+slivers to one 124x40 block that moved 2px right and back.
+
 ## D20 — Sampling a window is a flag, not arithmetic
 
 Both round-3 agents, independently, spent most of their manual iteration

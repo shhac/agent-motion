@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"strings"
 )
 
 // timescale resolves the fast/slow choice once per group. Without it the same
@@ -27,6 +28,7 @@ type groupStats struct {
 	sum         float64
 	peak        float64
 	peakTime    float64
+	peakIndex   int
 	peakDrift   float64
 	footprint   float64
 	// path is where the activity was, one point per active transition, so a
@@ -38,7 +40,10 @@ type groupStats struct {
 // aggregate reduces one group's stretch of samples to its statistics.
 func (a *Analyzer) aggregate(g group, floors []float64) groupStats {
 	t := g.scale
-	stats := groupStats{frames: g.to - g.from + 1, peakTime: a.samples[g.from].Time}
+	stats := groupStats{
+		frames:   g.to - g.from + 1,
+		peakTime: a.samples[g.from].Time, peakIndex: a.samples[g.from].Index,
+	}
 	seenFirst := false
 
 	for i := g.from; i <= g.to; i++ {
@@ -51,7 +56,7 @@ func (a *Analyzer) aggregate(g group, floors []float64) groupStats {
 			measure = drift
 		}
 		if measure > stats.peak {
-			stats.peak, stats.peakTime = measure, a.samples[i].Time
+			stats.peak, stats.peakTime, stats.peakIndex = measure, a.samples[i].Time, a.samples[i].Index
 		}
 		if !a.groupActive(i, g, floors) {
 			continue
@@ -167,6 +172,9 @@ func summarise(e Event, opt TimelineOptions) string {
 		}
 		return fmt.Sprintf("Gradual change from %s to %s in the %s (%s). Too slow to clear the threshold between adjacent frames; only visible over the %.1fs drift window.",
 			clock(e.Start), clock(e.End), e.Position, size, opt.DriftSeconds)
+	case KindShift:
+		return fmt.Sprintf("Content in the %s (%s) moved %s at %s%s. The same content is in a new place rather than having appeared or changed, which on a page is a layout shift. Score %.4f — the share of the frame affected times how far it went, not Chrome's CLS.",
+			e.Position, size, movement(e.MovedBy), clock(e.Start), settled(e.Persists), e.ShiftScore)
 	case KindStep:
 		return fmt.Sprintf("One-off change at %s in the %s (%s) that is still there afterwards — something appeared, vanished, or switched state.",
 			clock(e.Start), e.Position, size)
@@ -329,4 +337,34 @@ func (e *Event) round() {
 	e.Start, e.End, e.Peak = round2(e.Start), round2(e.End), round2(e.Peak)
 	e.PeakChanged, e.MeanChanged = round4(e.PeakChanged), round4(e.MeanChanged)
 	e.PeakDrift, e.RegionArea = round4(e.PeakDrift), round4(e.RegionArea)
+}
+
+// movement puts a displacement into words, because "moved down 40 px" is
+// actionable in a way that [0, 40] is not.
+func movement(by [2]int) string {
+	parts := make([]string, 0, 2)
+	if by[1] != 0 {
+		parts = append(parts, fmt.Sprintf("down %d px", by[1]))
+		if by[1] < 0 {
+			parts[len(parts)-1] = fmt.Sprintf("up %d px", -by[1])
+		}
+	}
+	if by[0] != 0 {
+		word := fmt.Sprintf("right %d px", by[0])
+		if by[0] < 0 {
+			word = fmt.Sprintf("left %d px", -by[0])
+		}
+		parts = append(parts, word)
+	}
+	if len(parts) == 0 {
+		return "nowhere"
+	}
+	return strings.Join(parts, " and ")
+}
+
+func settled(persists *bool) string {
+	if reverted(persists) {
+		return ", and moves back"
+	}
+	return ", and stays there"
 }

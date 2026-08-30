@@ -46,6 +46,24 @@ jitter and the drift were invisible. After, the heartbeat is confined to its
 own 20x20 region, the jitter is reported as the card's two moving edges, the
 drift is found within a few pixels, and the stall is named in the narrative.
 
+## The layout scenario
+
+`make fixture SCENARIO=layout` renders the content-shift test: an article page
+where a banner and a late image each push everything below them down, plus a
+badge that appears without moving anything.
+
+| Event | Time | Region | What it tests |
+|---|---|---|---|
+| `banner-shift` | 2.0s | below y=60, down 40px | a large displacement |
+| `inline-shift` | 4.0s | below y=250, down 24px | a second, smaller one |
+| `badge-appear` | 6.0s | 700,20–760,44 | content appearing, which must **not** be called a shift |
+
+The badge is the control and the reason the scenario exists. A tool that reports
+every one-off change as a shift is no more useful than one that reports none.
+
+Measured: both shifts are found with their displacement exact to the pixel
+(40 and 24), and the badge is reported as a `step`.
+
 ## The player scenario
 
 `make fixture SCENARIO=player` renders the generalisation test: a video-player

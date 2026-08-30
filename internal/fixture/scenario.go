@@ -104,7 +104,12 @@ func mix(a, b rgb, f float64) rgb {
 	}
 }
 
+// fill paints a rectangle, clipped to the canvas. Clipping here rather than at
+// every call site means a scenario can lay content out past the bottom of the
+// page — which is what a page pushed down by a layout shift actually does.
 func fill(dst []byte, width int, r image.Rectangle, c rgb) {
+	height := len(dst) / (width * 3)
+	r = r.Intersect(image.Rect(0, 0, width, height))
 	for y := r.Min.Y; y < r.Max.Y; y++ {
 		row := y * width * 3
 		for x := r.Min.X; x < r.Max.X; x++ {

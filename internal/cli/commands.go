@@ -2,7 +2,13 @@ package cli
 
 // Commands that answer in text: what this file is, and what happens in it.
 
-import "github.com/spf13/cobra"
+import (
+	"strings"
+
+	"github.com/shhac/agent-motion/internal/engine"
+	output "github.com/shhac/lib-agent-output"
+	"github.com/spf13/cobra"
+)
 
 func inspectCommand(g *globals) *cobra.Command {
 	return &cobra.Command{
@@ -43,6 +49,64 @@ func timelineCommand(g *globals) *cobra.Command {
 	}
 	flags.bind(cmd)
 	return cmd
+}
+
+func checkCommand(g *globals) *cobra.Command {
+	var flags analyseFlags
+	var opt engine.CheckOptions
+	cmd := &cobra.Command{
+		Use:   "check <video>",
+		Short: "Assert conditions about a recording and fail if they are not met",
+		Long: "Check turns the analysis into a pass or fail, so a visual regression can\n" +
+			"break a build instead of waiting to be noticed. Every threshold is opt-in;\n" +
+			"with none given it asserts nothing and says so. It exits non-zero on failure,\n" +
+			"and every failed assertion names the event that broke it.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.validate(); err != nil {
+				return err
+			}
+			opt.Analyse = flags.options(args[0])
+			// Only thresholds the caller actually typed are asserted; an unset
+			// zero must not read as "nothing may move at all".
+			for _, name := range []string{"max-shift-score", "max-shift-pixels"} {
+				if cmd.Flags().Changed(name) {
+					opt.Set(name)
+				}
+			}
+			result, err := g.engine().Check(cmd.Context(), opt)
+			if err != nil {
+				return err
+			}
+			if err := g.print(cmd, result); err != nil {
+				return err
+			}
+			if !result.Passed {
+				return output.New(failureLine(result), output.FixableByHuman).
+					WithHint("the full verdict, including which event broke each assertion, is on stdout")
+			}
+			return nil
+		},
+	}
+	flags.bind(cmd)
+	cmd.Flags().Float64Var(&opt.MaxShiftScore, "max-shift-score", 0, "Fail if any layout shift scores above this")
+	cmd.Flags().IntVar(&opt.MaxShiftPixels, "max-shift-pixels", 0, "Fail if content moves further than this many pixels")
+	cmd.Flags().BoolVar(&opt.NoShift, "no-shift", false, "Fail if any content moves at all")
+	cmd.Flags().BoolVar(&opt.NoStall, "no-stall", false, "Fail if continuous activity stops and resumes")
+	cmd.Flags().BoolVar(&opt.NoFlicker, "no-flicker", false, "Fail if anything toggles repeatedly")
+	cmd.Flags().BoolVar(&opt.Quiet, "quiet", false, "Fail if anything changes at all")
+	return cmd
+}
+
+// failureLine summarises which assertions failed, for the one-line error.
+func failureLine(r *engine.CheckResult) string {
+	var failed []string
+	for _, a := range r.Assertions {
+		if !a.Passed {
+			failed = append(failed, a.Name)
+		}
+	}
+	return "check failed: " + strings.Join(failed, ", ")
 }
 
 func projectCommand(g *globals) *cobra.Command {

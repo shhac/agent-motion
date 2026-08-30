@@ -12,6 +12,9 @@ agent-motion frames   <video> --at ... [--dir path] [--width N]
                               [--region x0,y0,x1,y1] [--pad N]
 agent-motion compare <video> --at t1,t2 [--region x0,y0,x1,y1] [--pad N]
                               [--threshold N] [-o path]
+agent-motion check    <video> [analysis flags] [--max-shift-score N]
+                              [--max-shift-pixels N] [--no-shift] [--no-stall]
+                              [--no-flicker] [--quiet]
 agent-motion mcp   [--http addr]
 agent-motion usage
 ```
