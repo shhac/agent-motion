@@ -77,6 +77,15 @@ All six events are found with no false positives, and the events carry
 direction, rate, region and persistence. See `decisions.md` for what each
 correction cost.
 
+## Real recordings
+
+Every scenario above is synthetic, which makes them scoreable and makes them
+unrepresentative. [`capture-real-recordings.md`](capture-real-recordings.md)
+instructs an agent with a browser and a screen recorder to capture real page
+loads — chosen for content shift, with stable controls alongside — into
+`.cache/eval/real/`. It is written to be handed to a tool that does not have
+`agent-motion` at all.
+
 ## Agent trials
 
 The tool is for agents, so it is tested by giving agents a video and no context
