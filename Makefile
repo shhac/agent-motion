@@ -12,11 +12,12 @@ test:
 test-short:
 	GOCACHE=$(GOCACHE) go test ./... -count=1 -short
 
-# Renders the reference scenario used for evaluation. Needs FFmpeg.
+# Renders an evaluation scenario. Needs FFmpeg. SCENARIO=reference|defect.
+SCENARIO ?= reference
 fixture:
 	@mkdir -p .cache/eval
-	GOCACHE=$(GOCACHE) go run ./tools/genfixture \
-		-video .cache/eval/reference.mp4 -truth .cache/eval/reference-truth.json
+	GOCACHE=$(GOCACHE) go run ./tools/genfixture -scenario $(SCENARIO) \
+		-video .cache/eval/$(SCENARIO).mp4 -truth .cache/eval/$(SCENARIO)-truth.json
 
 vet:
 	GOCACHE=$(GOCACHE) go vet ./...

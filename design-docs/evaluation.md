@@ -28,6 +28,24 @@ Nothing else moves. Any additional event is a false positive.
 right kind, within a second of the right time, over a region that overlaps the
 true one by more than 60% without being more than 3x its area.
 
+## The defect scenario
+
+`make fixture SCENARIO=defect` renders a second, harder video: a dashboard that
+is mostly still, with a dot in the header pulsing every 5 frames for the whole
+20 seconds. Three faults hide behind that heartbeat.
+
+| Event | Time | Region | What it tests |
+|---|---|---|---|
+| `layout-jitter` | 6.2s, 5 frames | 200,120–322,160 | a 2px shift beside a constant animation |
+| `heartbeat-stall` | 11.0–14.0s | 556,16–576,36 | a freeze, which is an absence of change |
+| `status-drift` | 16.0–19.0s | 450,250–530,290 | slow change beside a constant animation |
+
+This scenario is what forced spatial segmentation. Before it, the heartbeat
+produced one event spanning 376x144 px covering 10.7 seconds, and both the
+jitter and the drift were invisible. After, the heartbeat is confined to its
+own 20x20 region, the jitter is reported as the card's two moving edges, the
+drift is found within a few pixels, and the stall is named in the narrative.
+
 ## Baseline
 
 The first implementation, run over the whole reference video, reported five

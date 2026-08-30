@@ -42,35 +42,55 @@ capture and a heavily compressed camera clip. The floor is
 `median + 6 × MAD` of the changed-fraction series, clamped to `[0.0004, 0.05]`.
 It adapts to the recording rather than to an assumption about it.
 
-## Segmentation
+## Segmentation is spatial as well as temporal
+
+Statistics are kept per cell of an 8x6 grid, and segmentation runs per cell
+before anything is merged. This is not an optimisation; it is what makes the
+tool usable on real recordings. Almost every real capture has something
+animating continuously — a spinner, a caret, a cursor, a clock — and a purely
+temporal pass merges that with everything else and reports one event covering
+the whole video. Measured on the defect scenario: a 20x20 pulsing dot produced
+a single event spanning 376x144 px and hid both other faults.
+
+Cells also improve sensitivity. A small change fills a much larger share of one
+cell than of the whole frame, so a per-cell noise floor sees things a global
+one cannot.
+
+Cell segments are then merged into events when their cells touch (including
+diagonally) and their stretches overlap. A moving object crossing several cells
+stays one event; two things happening at once in different places stay two.
+
+## Segmentation steps
 
 1. **Whole-frame transitions** — those changing at least half the frame — are
    pulled out first. A run of one is a `cut`; a run of one or two that does not
    persist is a `flash`; longer runs fall through to ordinary segmentation. They
    are removed before anything else so one enormous transition cannot swallow
    the events around it.
-2. **Fast segments** are runs above the noise floor, merged across gaps of up to
-   `--merge-gap` (0.25s), which keeps a flicker from fragmenting into dozens of
-   events.
-3. **Slow segments** are runs of drift above the floor, excluding any time
-   within one drift window after real fast activity, and must last at least one
-   window. Their start is shifted back by the window, since drift reports a
-   change one window after it began.
+2. **Fast segments** are per-cell runs above that cell's noise floor, merged
+   across gaps of up to 0.25s, which keeps a flicker from fragmenting into
+   dozens of events.
+3. **Slow segments** are per-cell runs of drift above the floor, excluding any
+   time within one drift window after fast activity **in that same cell**. The
+   mask has to be per cell: a constantly animating corner would otherwise hide
+   a slow change happening anywhere else. They must last at least one window,
+   and their start is shifted back by it, since drift reports a change one
+   window after it began.
 
 ## Classification
 
-Within a segment: `duty` is the share of frames that were active, `travel` is
-how far the activity centroid moved relative to the typical per-frame footprint,
-and `persists` compares the nearest retained checkpoint either side of the
-segment inside its region.
+Within a segment: `active` is the number of transitions that cleared the floor,
+`duty` is that as a share of the span, `travel` is how far the activity centroid
+moved relative to the typical per-frame footprint, and `persists` compares the
+nearest retained checkpoint either side of the segment inside its region.
 
 | Kind | Condition |
 |---|---|
 | `cut` | whole-frame, one transition, persists |
 | `flash` | whole-frame, one or two transitions, reverts |
-| `step` | at most ~2 frames long, persists |
-| `blip` | at most ~2 frames long, reverts |
-| `flicker` | 4+ active transitions, duty below 0.75, centroid stationary |
+| `step` | at most 2 transitions, persists |
+| `blip` | at most 2 transitions, reverts |
+| `flicker` | 4+ transitions, duty below 0.75, centroid stationary |
 | `motion` | centroid travels further than the typical footprint |
 | `gradual` | found only in the slow pass |
 | `busy` | anything else sustained |
@@ -107,3 +127,10 @@ Both facts are stated in the result rather than left to be discovered.
 
 The optional legend band is appended *below* the frame, so image `x,y` still
 maps to source `x,y`.
+
+## What a stall looks like
+
+A hang or a freeze is an *absence* of change, so no event can describe it. It
+reaches the caller through `quiet_ranges` and through the narrative, which names
+the quiet stretches explicitly. On a recording that is mostly still this is
+noise; on one with a continuous heartbeat it is the finding.

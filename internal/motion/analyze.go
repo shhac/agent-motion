@@ -17,8 +17,9 @@ type Options struct {
 	// Threshold is the mean absolute RGB delta a pixel must exceed to count
 	// as changed, on a 0..255 scale.
 	Threshold float64
-	// GridCols and GridRows describe the coarse spatial grid reported per
-	// transition. Zero means the default 4x3.
+	// GridCols and GridRows describe the spatial grid. Events are found per
+	// cell and then merged, so two things happening at once in different
+	// places stay two events. Zero means the default 8x6.
 	GridCols, GridRows int
 	// Checkpoints bounds how many low-resolution frames are retained so an
 	// event can be classified as persistent or transient. Zero disables it.
@@ -39,30 +40,52 @@ type Options struct {
 
 func (o Options) withDefaults() Options {
 	if o.GridCols <= 0 {
-		o.GridCols = 4
+		o.GridCols = 8
 	}
 	if o.GridRows <= 0 {
-		o.GridRows = 3
+		o.GridRows = 6
 	}
 	return o
 }
 
-// Sample is one frame-to-frame transition. Coordinates are in analysis pixels.
+// Cell is one grid cell's contribution to one transition. Counts are pixels;
+// the box bounds the changed pixels inside the cell, in analysis coordinates.
+type Cell struct {
+	Changed                    int32
+	Drift                      int32
+	MinX, MinY, MaxX, MaxY     int16
+	DMinX, DMinY, DMaxX, DMaxY int16
+}
+
+// Box returns the changed area within the cell, empty when nothing changed.
+func (c Cell) Box() image.Rectangle {
+	if c.Changed == 0 {
+		return image.Rectangle{}
+	}
+	return image.Rect(int(c.MinX), int(c.MinY), int(c.MaxX)+1, int(c.MaxY)+1)
+}
+
+// DriftBox is the same for the slow timescale, which is the only bound a
+// gradual change has: it never registers as a fast change at all.
+func (c Cell) DriftBox() image.Rectangle {
+	if c.Drift == 0 {
+		return image.Rectangle{}
+	}
+	return image.Rect(int(c.DMinX), int(c.DMinY), int(c.DMaxX)+1, int(c.DMaxY)+1)
+}
+
+// Sample is one frame-to-frame transition.
 type Sample struct {
 	Index int     `json:"index"`
 	Time  float64 `json:"time_seconds"`
-	// Changed is the fraction of pixels differing from the previous frame.
+	// Changed is the fraction of the whole frame differing from the previous
+	// frame, which is what identifies a cut or a flash.
 	Changed float64 `json:"changed_fraction"`
-	// Drift is the fraction differing from the frame DriftFrames earlier. It
-	// is the only signal that sees a fade or any change slower than the
-	// threshold per frame.
-	Drift  float64         `json:"drift_fraction"`
-	Energy float64         `json:"energy"`
-	BBox   image.Rectangle `json:"-"`
-	// DriftBBox bounds the pixels differing from the delayed frame.
-	DriftBBox image.Rectangle `json:"-"`
-	CX, CY    float64         `json:"-"`
-	Cells     []float64       `json:"-"`
+	// Drift is the same measure against the frame DriftFrames earlier. It is
+	// the only signal that sees a fade.
+	Drift  float64 `json:"drift_fraction"`
+	Energy float64 `json:"energy"`
+	Cells  []Cell  `json:"-"`
 }
 
 // PixelStats are the per-pixel accumulations behind the projection image.
@@ -75,10 +98,36 @@ type PixelStats struct {
 	Start, End    float64
 }
 
+// Grid describes the spatial decomposition used for segmentation.
+type Grid struct {
+	Cols, Rows    int
+	Width, Height int
+	// Pixels is the pixel count of each cell, which differs at the right and
+	// bottom edges when the frame does not divide evenly.
+	Pixels []int
+}
+
+// Bounds returns the analysis-coordinate rectangle of cell index i.
+func (g Grid) Bounds(i int) image.Rectangle {
+	col, row := i%g.Cols, i/g.Cols
+	return image.Rect(
+		col*g.Width/g.Cols, row*g.Height/g.Rows,
+		(col+1)*g.Width/g.Cols, (row+1)*g.Height/g.Rows,
+	)
+}
+
+// Adjacent reports whether two cells touch, including diagonally.
+func (g Grid) Adjacent(a, b int) bool {
+	dc := abs(a%g.Cols - b%g.Cols)
+	dr := abs(a/g.Cols - b/g.Cols)
+	return dc <= 1 && dr <= 1
+}
+
 // Analyzer consumes frames in order and accumulates everything the timeline
 // and the projection need from a single decode pass.
 type Analyzer struct {
 	opt           Options
+	grid          Grid
 	width, height int
 	pixels        int
 
@@ -94,13 +143,14 @@ type Analyzer struct {
 
 	deltas       []float32
 	changedIndex []int32
-	ignored      []float64
+	nearCells    []Cell
+	farCells     []Cell
 
 	samples     []Sample
+	ignored     []float64
 	accumulated int
 	frames      int
-	start       float64
-	end         float64
+	start, end  float64
 
 	checkpoints []checkpoint
 	cpWidth     int
@@ -125,6 +175,7 @@ func New(width, height int, opt Options) *Analyzer {
 	pixels := width * height
 	a := &Analyzer{
 		opt: opt, width: width, height: height, pixels: pixels,
+		grid:         newGrid(opt.GridCols, opt.GridRows, width, height),
 		magnitude:    make([]float64, pixels),
 		weightedTime: make([]float64, pixels),
 		changes:      make([]int32, pixels),
@@ -132,6 +183,10 @@ func New(width, height int, opt Options) *Analyzer {
 		lastSign:     make([]int8, pixels),
 		deltas:       make([]float32, pixels),
 		changedIndex: make([]int32, 0, pixels),
+	}
+	if opt.DriftFrames > 0 {
+		a.nearCells = make([]Cell, opt.GridCols*opt.GridRows)
+		a.farCells = make([]Cell, opt.GridCols*opt.GridRows)
 	}
 	if opt.DriftFrames > 0 {
 		// Two spare slots let drift compare against two references, so a
@@ -153,17 +208,26 @@ func New(width, height int, opt Options) *Analyzer {
 	return a
 }
 
+func newGrid(cols, rows, width, height int) Grid {
+	g := Grid{Cols: cols, Rows: rows, Width: width, Height: height, Pixels: make([]int, cols*rows)}
+	for i := range g.Pixels {
+		b := g.Bounds(i)
+		g.Pixels[i] = max(1, b.Dx()*b.Dy())
+	}
+	return g
+}
+
 func checkpointSize(width, height int) (int, int) {
 	const target = 96
 	if width <= target {
 		return width, height
 	}
 	h := int(math.Round(float64(height) * target / float64(width)))
-	if h < 1 {
-		h = 1
-	}
-	return target, h
+	return target, max(1, h)
 }
+
+// Grid returns the spatial decomposition in use.
+func (a *Analyzer) Grid() Grid { return a.grid }
 
 // Add folds one frame into the accumulation. Frames must arrive in time order.
 func (a *Analyzer) Add(f video.Frame) error {
@@ -193,78 +257,13 @@ func (a *Analyzer) Add(f video.Frame) error {
 	return nil
 }
 
-// driftSpare is how much older the second drift reference is. A transient that
-// lasts fewer frames than this cannot appear in both references.
-const driftSpare = 2
-
-// pushDelay stores the frame in the ring used for the slow timescale.
-func (a *Analyzer) pushDelay(pix []byte) {
-	if a.ringSize == 0 {
-		return
-	}
-	copy(a.ring[a.pushed%a.ringSize], pix)
-	a.pushed++
-}
-
-// frameAt returns retained frame number i, or nil once it has been overwritten.
-func (a *Analyzer) frameAt(i int) []byte {
-	if i < 0 || i >= a.pushed || a.pushed-i > a.ringSize {
-		return nil
-	}
-	return a.ring[i%a.ringSize]
-}
-
-// drift measures change across the slow window. It takes the smaller of two
-// references so one odd frame in the past does not read as a slow change.
-func (a *Analyzer) drift(f video.Frame, s *Sample) {
-	if a.ringSize == 0 {
-		return
-	}
-	near := a.frameAt(a.pushed - a.lag)
-	far := a.frameAt(a.pushed - a.lag - driftSpare)
-	if near == nil || far == nil {
-		return
-	}
-	nearCount, nearBox := a.compare(f.Pix, near)
-	farCount, farBox := a.compare(f.Pix, far)
-	count, box := nearCount, nearBox
-	if farCount < nearCount {
-		count, box = farCount, farBox
-	}
-	s.Drift = float64(count) / float64(a.pixels)
-	s.DriftBBox = box
-}
-
-// compare counts pixels differing from reference by more than the threshold.
-func (a *Analyzer) compare(current, reference []byte) (int, image.Rectangle) {
-	changed := 0
-	minX, minY, maxX, maxY := a.width, a.height, -1, -1
-	for p := 0; p < a.pixels; p++ {
-		i := p * 3
-		delta := (absDiff(current[i], reference[i]) +
-			absDiff(current[i+1], reference[i+1]) +
-			absDiff(current[i+2], reference[i+2])) / 3
-		if delta <= a.opt.Threshold {
-			continue
-		}
-		changed++
-		x, y := p%a.width, p/a.width
-		minX, minY = min(minX, x), min(minY, y)
-		maxX, maxY = max(maxX, x), max(maxY, y)
-	}
-	if maxX < 0 {
-		return 0, image.Rectangle{}
-	}
-	return changed, image.Rect(minX, minY, maxX+1, maxY+1)
-}
-
 func (a *Analyzer) difference(f video.Frame) Sample {
-	cols, rows := a.opt.GridCols, a.opt.GridRows
-	cells := make([]float64, cols*rows)
-	var energy, weightX, weightY, weight float64
-	minX, minY, maxX, maxY := a.width, a.height, -1, -1
+	cells := make([]Cell, len(a.grid.Pixels))
+	resetBounds(cells)
+	var energy float64
 	a.changedIndex = a.changedIndex[:0]
 
+	cols, rows := a.grid.Cols, a.grid.Rows
 	for p := 0; p < a.pixels; p++ {
 		i := p * 3
 		delta := (absDiff(f.Pix[i], a.previous[i]) +
@@ -278,28 +277,17 @@ func (a *Analyzer) difference(f video.Frame) Sample {
 		a.changedIndex = append(a.changedIndex, int32(p))
 
 		x, y := p%a.width, p/a.width
-		cells[(y*rows/a.height)*cols+(x*cols/a.width)]++
-		weightX += float64(x) * delta
-		weightY += float64(y) * delta
-		weight += delta
-		minX, minY = min(minX, x), min(minY, y)
-		maxX, maxY = max(maxX, x), max(maxY, y)
+		c := &cells[(y*rows/a.height)*cols+(x*cols/a.width)]
+		c.Changed++
+		c.MinX, c.MinY = minI16(c.MinX, int16(x)), minI16(c.MinY, int16(y))
+		c.MaxX, c.MaxY = maxI16(c.MaxX, int16(x)), maxI16(c.MaxY, int16(y))
 	}
 
-	changed := len(a.changedIndex)
-	cellPixels := float64(a.pixels) / float64(cols*rows)
-	for i := range cells {
-		cells[i] /= cellPixels
-	}
 	s := Sample{
 		Index: len(a.samples), Time: f.Time,
-		Changed: float64(changed) / float64(a.pixels),
+		Changed: float64(len(a.changedIndex)) / float64(a.pixels),
 		Energy:  energy / float64(a.pixels),
 		Cells:   cells,
-	}
-	if maxX >= 0 {
-		s.BBox = image.Rect(minX, minY, maxX+1, maxY+1)
-		s.CX, s.CY = weightX/weight, weightY/weight
 	}
 	a.accumulate(f, s)
 	return s
@@ -331,6 +319,83 @@ func (a *Analyzer) accumulate(f video.Frame, s Sample) {
 		}
 		a.lastSign[p] = sign
 	}
+}
+
+// driftSpare is how much older the second drift reference is. A transient that
+// lasts fewer frames than this cannot appear in both references.
+const driftSpare = 2
+
+func (a *Analyzer) pushDelay(pix []byte) {
+	if a.ringSize == 0 {
+		return
+	}
+	copy(a.ring[a.pushed%a.ringSize], pix)
+	a.pushed++
+}
+
+// frameAt returns retained frame number i, or nil once it has been overwritten.
+func (a *Analyzer) frameAt(i int) []byte {
+	if i < 0 || i >= a.pushed || a.pushed-i > a.ringSize {
+		return nil
+	}
+	return a.ring[i%a.ringSize]
+}
+
+// drift measures change across the slow window. It takes the smaller of two
+// references so one odd frame in the past does not read as a slow change.
+func (a *Analyzer) drift(f video.Frame, s *Sample) {
+	if a.ringSize == 0 {
+		return
+	}
+	near := a.frameAt(a.pushed - a.lag)
+	far := a.frameAt(a.pushed - a.lag - driftSpare)
+	if near == nil || far == nil {
+		return
+	}
+	nearCount := a.compare(f.Pix, near, a.nearCells)
+	farCount := a.compare(f.Pix, far, a.farCells)
+	count, cells := nearCount, a.nearCells
+	if farCount < nearCount {
+		count, cells = farCount, a.farCells
+	}
+	s.Drift = float64(count) / float64(a.pixels)
+	for i := range s.Cells {
+		s.Cells[i].Drift = cells[i].Changed
+		s.Cells[i].DMinX, s.Cells[i].DMinY = cells[i].MinX, cells[i].MinY
+		s.Cells[i].DMaxX, s.Cells[i].DMaxY = cells[i].MaxX, cells[i].MaxY
+	}
+}
+
+// resetBounds prepares cells so the first changed pixel sets both bounds.
+func resetBounds(cells []Cell) {
+	for i := range cells {
+		cells[i] = Cell{MinX: math.MaxInt16, MinY: math.MaxInt16, MaxX: -1, MaxY: -1}
+	}
+}
+
+// compare counts and bounds pixels differing from reference by more than the
+// threshold, per cell and in total. Results land in the Changed/Min/Max fields
+// of cells; the caller moves whichever reference won into the drift fields.
+func (a *Analyzer) compare(current, reference []byte, cells []Cell) int {
+	resetBounds(cells)
+	changed := 0
+	cols, rows := a.grid.Cols, a.grid.Rows
+	for p := 0; p < a.pixels; p++ {
+		i := p * 3
+		delta := (absDiff(current[i], reference[i]) +
+			absDiff(current[i+1], reference[i+1]) +
+			absDiff(current[i+2], reference[i+2])) / 3
+		if delta <= a.opt.Threshold {
+			continue
+		}
+		changed++
+		x, y := p%a.width, p/a.width
+		c := &cells[(y*rows/a.height)*cols+(x*cols/a.width)]
+		c.Changed++
+		c.MinX, c.MinY = minI16(c.MinX, int16(x)), minI16(c.MinY, int16(y))
+		c.MaxX, c.MaxY = maxI16(c.MaxX, int16(x)), maxI16(c.MaxY, int16(y))
+	}
+	return changed
 }
 
 func (a *Analyzer) recordCheckpoint(f video.Frame) {
@@ -369,8 +434,7 @@ func (a *Analyzer) Frames() int { return a.frames }
 // Accumulated is the number of transitions that contributed to the image.
 func (a *Analyzer) Accumulated() int { return a.accumulated }
 
-// Ignored lists the timestamps of transitions excluded from the image by
-// Options.IgnoreAbove.
+// Ignored lists the timestamps of transitions excluded from the image.
 func (a *Analyzer) Ignored() []float64 { return a.ignored }
 
 // Span returns the first and last frame timestamps seen.
@@ -405,6 +469,27 @@ func absDiff(a, b byte) float64 {
 		return float64(a - b)
 	}
 	return float64(b - a)
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func minI16(a, b int16) int16 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxI16(a, b int16) int16 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func downsample(src []byte, sw, sh int, dst []byte, dw, dh int) {

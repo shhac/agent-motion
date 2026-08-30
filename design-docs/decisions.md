@@ -2,6 +2,22 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D9 — Segmentation is spatial as well as temporal
+
+Statistics are kept per cell of an 8x6 grid and segmentation runs per cell
+before merging. The defect scenario forced it: a 20x20 pulsing dot, the kind of
+heartbeat almost every real capture has, produced one event spanning 376x144 px
+across 10.7 seconds and hid both other faults entirely. Per-cell segmentation
+confines the heartbeat to its own corner, and the two faults beside it — a 2px
+card shift and a slow colour drift — are both found.
+
+The drift mask had to become per cell for the same reason. Globally masked, the
+constant heartbeat suppressed the slow-timescale pass everywhere.
+
+A side effect worth having: a per-cell noise floor is more sensitive than a
+global one, because a small change fills a much larger share of one cell than
+of the whole frame.
+
 ## D8 — Family alignment
 
 Added the conventions every sibling `agent-*` CLI has and this one lacked:

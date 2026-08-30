@@ -70,7 +70,7 @@ func (o TimelineOptions) withDefaults() TimelineOptions {
 		o.MergeGap = 0.25
 	}
 	if o.MinFloor <= 0 {
-		o.MinFloor = 0.0004
+		o.MinFloor = 0.0015
 	}
 	if o.MaxEvents <= 0 {
 		o.MaxEvents = 40
@@ -80,40 +80,48 @@ func (o TimelineOptions) withDefaults() TimelineOptions {
 
 type span struct{ from, to int } // inclusive sample indices
 
-// round trims float noise so the record stays readable and diffs cleanly.
-func (e *Event) round() {
-	e.Start = round2(e.Start)
-	e.End = round2(e.End)
-	e.Peak = round2(e.Peak)
-	e.PeakChanged = round4(e.PeakChanged)
-	e.MeanChanged = round4(e.MeanChanged)
-	e.PeakDrift = round4(e.PeakDrift)
-	e.RegionArea = round4(e.RegionArea)
+// cellSpan is one cell being active over one stretch of time.
+type cellSpan struct {
+	cell int
+	span
+	slow bool
 }
 
-func round2(v float64) float64 { return math.Round(v*100) / 100 }
-func round4(v float64) float64 { return math.Round(v*10000) / 10000 }
+// group is a set of touching cells active over the same stretch, which is what
+// becomes a single event.
+type group struct {
+	cells []int
+	span
+	slow bool
+}
 
-// Timeline segments the per-transition series and describes each segment.
+// Timeline segments the series in space and time, then describes each segment.
+//
+// Segmentation is per grid cell rather than per frame because real recordings
+// almost always have something animating continuously — a spinner, a cursor, a
+// clock. A purely temporal pass merges that with everything else and reports
+// one enormous event covering the whole video.
 func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 	opt = opt.withDefaults()
-	s := a.samples
-	if len(s) == 0 {
+	if len(a.samples) == 0 {
 		return Timeline{Events: []Event{}}
 	}
-	floor := noiseFloor(s, opt.MinFloor)
-	consumed := make([]bool, len(s))
-
+	consumed := make([]bool, len(a.samples))
 	events := a.wholeFrameEvents(opt, consumed)
-	for _, sp := range runs(len(s), func(i int) bool {
-		return !consumed[i] && s[i].Changed > floor
-	}, a.gapSamples(opt.MergeGap, opt.FPS)) {
-		events = append(events, a.describe(sp, floor, opt))
-	}
-	events = append(events, a.gradualEvents(opt, floor, consumed)...)
 
+	floors := a.cellFloors(opt.MinFloor)
+	gap := a.gapSamples(opt.MergeGap, opt.FPS)
+	spans := a.fastSpans(floors, consumed, gap)
+	spans = append(spans, a.slowSpans(floors, consumed, gap, opt)...)
+
+	for _, g := range groupSpans(spans, a.grid, gap) {
+		if e, ok := a.describe(g, floors, opt); ok {
+			events = append(events, e)
+		}
+	}
 	sort.Slice(events, func(i, j int) bool { return events[i].Start < events[j].Start })
-	t := Timeline{NoiseFloor: floor, Events: events}
+
+	t := Timeline{NoiseFloor: round4(median(floors)), Events: events}
 	if len(events) > opt.MaxEvents {
 		t.Events = trimToBudget(events, opt.MaxEvents)
 		t.Truncated = len(events) - len(t.Events)
@@ -128,22 +136,153 @@ func (a *Analyzer) gapSamples(gap, fps float64) int {
 	return max(1, int(math.Round(gap*fps)))
 }
 
-// wholeFrameEvents pulls out cuts and flashes before ordinary segmentation, so
-// one enormous transition does not swallow the events around it.
+// cellFloors estimates per-cell noise. A small event fills a much larger share
+// of one cell than of the whole frame, which is why sensitivity improves when
+// the floor is local.
+func (a *Analyzer) cellFloors(minimum float64) []float64 {
+	floors := make([]float64, len(a.grid.Pixels))
+	series := make([]float64, len(a.samples))
+	for c := range floors {
+		for i, s := range a.samples {
+			series[i] = float64(s.Cells[c].Changed) / float64(a.grid.Pixels[c])
+		}
+		// Two changed pixels is the smallest thing worth calling an event; one
+		// is indistinguishable from a single noisy pixel.
+		floors[c] = math.Max(robustFloor(series, minimum), 2/float64(a.grid.Pixels[c]))
+	}
+	return floors
+}
+
+func (a *Analyzer) fastSpans(floors []float64, consumed []bool, gap int) []cellSpan {
+	var out []cellSpan
+	for c := range floors {
+		for _, sp := range runs(len(a.samples), func(i int) bool {
+			return !consumed[i] && a.cellChanged(i, c) > floors[c]
+		}, gap) {
+			out = append(out, cellSpan{cell: c, span: sp})
+		}
+	}
+	return out
+}
+
+// slowSpans finds cells drifting without any fast activity of their own. The
+// mask is per cell, so a constantly animating corner no longer hides a slow
+// change happening elsewhere.
+func (a *Analyzer) slowSpans(floors []float64, consumed []bool, gap int, opt TimelineOptions) []cellSpan {
+	if opt.DriftSeconds <= 0 || opt.FPS <= 0 {
+		return nil
+	}
+	lag := int(math.Round(opt.DriftSeconds * opt.FPS))
+	var out []cellSpan
+	for c := range floors {
+		fast := make([]bool, len(a.samples))
+		for i := range a.samples {
+			if !consumed[i] && a.cellChanged(i, c) <= floors[c] {
+				continue
+			}
+			// Drift stays elevated for one window after any real change.
+			for j := i; j <= min(len(a.samples)-1, i+lag); j++ {
+				fast[j] = true
+			}
+		}
+		for _, sp := range runs(len(a.samples), func(i int) bool {
+			return !fast[i] && a.cellDrift(i, c) > floors[c]
+		}, lag) {
+			if sp.to-sp.from+1 >= max(2, lag) {
+				out = append(out, cellSpan{cell: c, span: sp, slow: true})
+			}
+		}
+	}
+	return out
+}
+
+func (a *Analyzer) cellChanged(i, c int) float64 {
+	return float64(a.samples[i].Cells[c].Changed) / float64(a.grid.Pixels[c])
+}
+
+func (a *Analyzer) cellDrift(i, c int) float64 {
+	return float64(a.samples[i].Cells[c].Drift) / float64(a.grid.Pixels[c])
+}
+
+// groupSpans merges touching cells whose active stretches overlap, so one thing
+// happening across several cells is one event and two things happening at once
+// in different places stay two.
+func groupSpans(spans []cellSpan, grid Grid, gap int) []group {
+	parent := make([]int, len(spans))
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		if parent[i] != i {
+			parent[i] = find(parent[i])
+		}
+		return parent[i]
+	}
+	for i := range spans {
+		for j := i + 1; j < len(spans); j++ {
+			if spans[i].slow != spans[j].slow {
+				continue
+			}
+			if !grid.Adjacent(spans[i].cell, spans[j].cell) {
+				continue
+			}
+			if !overlaps(spans[i].span, spans[j].span, gap) {
+				continue
+			}
+			parent[find(i)] = find(j)
+		}
+	}
+	byRoot := map[int]*group{}
+	var order []int
+	for i, s := range spans {
+		root := find(i)
+		g, ok := byRoot[root]
+		if !ok {
+			g = &group{span: span{from: s.from, to: s.to}, slow: s.slow}
+			byRoot[root] = g
+			order = append(order, root)
+		}
+		g.cells = append(g.cells, s.cell)
+		g.from, g.to = min(g.from, s.from), max(g.to, s.to)
+	}
+	out := make([]group, 0, len(order))
+	for _, root := range order {
+		g := byRoot[root]
+		sort.Ints(g.cells)
+		g.cells = dedupe(g.cells)
+		out = append(out, *g)
+	}
+	return out
+}
+
+func overlaps(a, b span, gap int) bool {
+	return a.from-gap <= b.to && b.from-gap <= a.to
+}
+
+// wholeFrameEvents pulls out cuts and flashes before anything else, so one
+// enormous transition does not swallow the events around it.
 func (a *Analyzer) wholeFrameEvents(opt TimelineOptions, consumed []bool) []Event {
 	s := a.samples
 	var events []Event
 	for _, sp := range runs(len(s), func(i int) bool { return s[i].Changed >= opt.CutFraction }, 1) {
-		length := sp.to - sp.from + 1
-		if length > 2 {
+		if sp.to-sp.from+1 > 2 {
 			continue // a long whole-frame run is sustained activity, not a boundary
 		}
 		for i := sp.from; i <= sp.to; i++ {
 			consumed[i] = true
 		}
-		e := a.describe(sp, 0, opt)
-		e.Kind = KindCut
-		if length == 2 || falsey(e.Persists) {
+		whole := image.Rect(0, 0, a.width, a.height)
+		e := Event{
+			Kind: KindCut, Start: s[sp.from].Time, End: s[sp.to].Time, Peak: s[sp.from].Time,
+			Region: a.sourceRect(whole, opt), RegionArea: 1, Position: "whole frame",
+			Persists: a.persists(whole, s[sp.from].Time, s[sp.to].Time),
+		}
+		for i := sp.from; i <= sp.to; i++ {
+			e.PeakChanged = math.Max(e.PeakChanged, s[i].Changed)
+			e.MeanChanged += s[i].Changed / float64(sp.to-sp.from+1)
+		}
+		if sp.to > sp.from || falsey(e.Persists) {
 			e.Kind = KindFlash
 		}
 		e.round()
@@ -153,93 +292,118 @@ func (a *Analyzer) wholeFrameEvents(opt TimelineOptions, consumed []bool) []Even
 	return events
 }
 
-// gradualEvents finds change that is invisible frame to frame but obvious over
-// the drift window, excluding time already explained by a faster event.
-func (a *Analyzer) gradualEvents(opt TimelineOptions, floor float64, consumed []bool) []Event {
-	if opt.DriftSeconds <= 0 || opt.FPS <= 0 {
-		return nil
-	}
-	s := a.samples
-	lag := int(math.Round(opt.DriftSeconds * opt.FPS))
-	fast := make([]bool, len(s))
-	for i := range s {
-		if consumed[i] || s[i].Changed > floor {
-			for j := i; j <= min(len(s)-1, i+lag); j++ {
-				fast[j] = true // drift stays elevated for one window after real motion
-			}
+// describe builds an event from one group of cells over one stretch of samples.
+func (a *Analyzer) describe(g group, floors []float64, opt TimelineOptions) (Event, bool) {
+	e := Event{Start: a.samples[g.from].Time, End: a.samples[g.to].Time, Peak: a.samples[g.from].Time}
+
+	union := image.Rectangle{}
+	active := 0
+	var sum float64
+	var firstCentre, lastCentre image.Point
+	var footprint float64
+	haveFirst := false
+
+	for i := g.from; i <= g.to; i++ {
+		changed, drift, box, centre := a.groupSample(i, g)
+		sum += changed
+		e.PeakDrift = math.Max(e.PeakDrift, drift)
+		measure := changed
+		if g.slow {
+			measure = drift
 		}
-	}
-	var events []Event
-	minLength := max(2, lag)
-	for _, sp := range runs(len(s), func(i int) bool {
-		return !fast[i] && s[i].Drift > floor
-	}, lag) {
-		if sp.to-sp.from+1 < minLength {
+		if measure > e.PeakChanged {
+			e.PeakChanged, e.Peak = measure, a.samples[i].Time
+		}
+		if !a.groupActive(i, g, floors) {
 			continue
 		}
-		e := a.describe(sp, floor, opt)
-		e.Kind = KindGradual
-		e.Start = math.Max(0, e.Start-opt.DriftSeconds)
-		e.ChangesPerSecond = 0
-		e.Region = a.sourceRect(unionDriftBBox(s[sp.from:sp.to+1]), opt)
-		e.RegionArea = areaFraction(e.Region, opt)
-		e.Position = positionOf(e.Region, opt)
-		e.Direction, e.TravelPixels = "", 0
-		e.round()
-		e.Summary = fmt.Sprintf(
-			"Gradual change from %s to %s in the %s (%s). Too slow to clear the threshold between adjacent frames; only visible over the %.1fs drift window.",
-			clock(e.Start), clock(e.End), e.Position, regionSize(e.Region), opt.DriftSeconds)
-		events = append(events, e)
-	}
-	return events
-}
-
-// describe builds an event from one contiguous span of samples.
-func (a *Analyzer) describe(sp span, floor float64, opt TimelineOptions) Event {
-	s := a.samples[sp.from : sp.to+1]
-	e := Event{
-		Start: s[0].Time,
-		End:   s[len(s)-1].Time,
-		Peak:  s[0].Time,
-	}
-	var sum float64
-	active := 0
-	union := image.Rectangle{}
-	for _, x := range s {
-		sum += x.Changed
-		e.PeakDrift = math.Max(e.PeakDrift, x.Drift)
-		if x.Changed > e.PeakChanged {
-			e.PeakChanged, e.Peak = x.Changed, x.Time
+		active++
+		union = union.Union(box)
+		footprint += math.Hypot(float64(box.Dx()), float64(box.Dy()))
+		if !haveFirst {
+			firstCentre, haveFirst = centre, true
 		}
-		if x.Changed > floor {
-			active++
-			union = union.Union(x.BBox)
-		}
+		lastCentre = centre
 	}
-	e.MeanChanged = sum / float64(len(s))
 	if union.Empty() {
-		union = unionBBox(s)
+		return Event{}, false
 	}
+	e.MeanChanged = sum / float64(g.to-g.from+1)
 	e.Region = a.sourceRect(union, opt)
 	e.RegionArea = areaFraction(e.Region, opt)
 	e.Position = positionOf(e.Region, opt)
 	e.Persists = a.persists(union, e.Start, e.End)
 
 	duration := e.End - e.Start
-	direction, travel := a.travel(s, floor, opt)
-	e.Direction, e.TravelPixels = direction, travel
-	e.Kind = classify(e, s, active, duration, opt)
+	if g.slow {
+		e.Kind = KindGradual
+		e.Start = math.Max(0, e.Start-opt.DriftSeconds)
+		e.round()
+		e.Summary = fmt.Sprintf(
+			"Gradual change from %s to %s in the %s (%s). Too slow to clear the threshold between adjacent frames; only visible over the %.1fs drift window.",
+			clock(e.Start), clock(e.End), e.Position, regionSize(e.Region), opt.DriftSeconds)
+		return e, true
+	}
+
+	e.Direction, e.TravelPixels = a.travel(firstCentre, lastCentre, footprint, active, opt)
+	e.Kind = classify(e, active, g.to-g.from+1, duration, opt)
 	if e.Kind == KindFlicker && duration > 0 {
 		e.ChangesPerSecond = math.Round(float64(active)/duration*10) / 10
 	}
 	e.round()
 	e.Summary = summarise(e, duration)
-	return e
+	return e, true
 }
 
-func classify(e Event, s []Sample, active int, duration float64, opt TimelineOptions) string {
-	duty := float64(active) / float64(len(s))
-	brief := opt.FPS > 0 && duration <= 2.5/opt.FPS
+// groupSample reduces one transition to what this group of cells saw.
+func (a *Analyzer) groupSample(i int, g group) (changed, drift float64, box image.Rectangle, centre image.Point) {
+	var count, driftCount int32
+	var weightX, weightY, weight float64
+	for _, c := range g.cells {
+		cell := a.samples[i].Cells[c]
+		count += cell.Changed
+		driftCount += cell.Drift
+		b := cell.Box()
+		if g.slow {
+			b = cell.DriftBox()
+		}
+		if b.Empty() {
+			continue
+		}
+		box = box.Union(b)
+		w := float64(cell.Changed)
+		if g.slow {
+			w = float64(cell.Drift)
+		}
+		weightX += float64(b.Min.X+b.Max.X) / 2 * w
+		weightY += float64(b.Min.Y+b.Max.Y) / 2 * w
+		weight += w
+	}
+	if weight > 0 {
+		centre = image.Pt(int(weightX/weight), int(weightY/weight))
+	}
+	pixels := float64(a.pixels)
+	return float64(count) / pixels, float64(driftCount) / pixels, box, centre
+}
+
+func (a *Analyzer) groupActive(i int, g group, floors []float64) bool {
+	for _, c := range g.cells {
+		measure := a.cellChanged(i, c)
+		if g.slow {
+			measure = a.cellDrift(i, c)
+		}
+		if measure > floors[c] {
+			return true
+		}
+	}
+	return false
+}
+
+func classify(e Event, active, frames int, _ float64, _ TimelineOptions) string {
+	duty := float64(active) / float64(frames)
+	// Brief means few transitions, not a short span: something that changes
+	// and changes back is two transitions however far apart they are.
+	brief := active <= 2
 
 	switch {
 	case brief && truthy(e.Persists):
@@ -262,6 +426,10 @@ func summarise(e Event, duration float64) string {
 		return fmt.Sprintf("One-off change at %s in the %s (%s) that is still there afterwards — something appeared, vanished, or switched state.",
 			clock(e.Start), e.Position, size)
 	case KindBlip:
+		if duration > 0 {
+			return fmt.Sprintf("Change at %s in the %s (%s) that reverts %.0f ms later — the region ends up as it started.",
+				clock(e.Start), e.Position, size, duration*1000)
+		}
 		return fmt.Sprintf("Brief change at %s in the %s (%s) that reverts immediately.",
 			clock(e.Start), e.Position, size)
 	case KindFlicker:
@@ -271,7 +439,7 @@ func summarise(e Event, duration float64) string {
 		return fmt.Sprintf("Movement from %s to %s in the %s (%s); the active area travels %s across about %d px.",
 			clock(e.Start), clock(e.End), e.Position, size, e.Direction, e.TravelPixels)
 	default:
-		return fmt.Sprintf("Sustained activity from %s to %s in the %s (%s), averaging %.1f%% of pixels changing per frame.",
+		return fmt.Sprintf("Sustained activity from %s to %s in the %s (%s), averaging %.2f%% of the frame changing per step.",
 			clock(e.Start), clock(e.End), e.Position, size, e.MeanChanged*100)
 	}
 }
@@ -285,32 +453,17 @@ func wholeFrameSummary(e Event) string {
 		clock(e.Start), e.PeakChanged*100)
 }
 
-// travel measures how far the activity centre moves across the span, in source
-// pixels, and names the direction when the movement is larger than the typical
-// per-frame footprint.
-func (a *Analyzer) travel(s []Sample, floor float64, opt TimelineOptions) (string, int) {
-	var first, last *Sample
-	var footprint float64
-	count := 0
-	for i := range s {
-		if s[i].Changed <= floor {
-			continue
-		}
-		if first == nil {
-			first = &s[i]
-		}
-		last = &s[i]
-		footprint += math.Hypot(float64(s[i].BBox.Dx()), float64(s[i].BBox.Dy()))
-		count++
-	}
-	if first == nil || last == nil || count < 2 {
+// travel names the direction only when the centre moves further than the
+// typical per-frame footprint, so a stationary flicker is never called motion.
+func (a *Analyzer) travel(first, last image.Point, footprint float64, active int, opt TimelineOptions) (string, int) {
+	if active < 2 {
 		return "", 0
 	}
 	sx, sy := a.scale(opt)
-	dx := (last.CX - first.CX) * sx
-	dy := (last.CY - first.CY) * sy
+	dx := float64(last.X-first.X) * sx
+	dy := float64(last.Y-first.Y) * sy
 	distance := math.Hypot(dx, dy)
-	if distance < (footprint/float64(count))*math.Max(sx, sy) {
+	if distance < (footprint/float64(active))*math.Max(sx, sy) {
 		return "", 0
 	}
 	return compass(dx, dy), int(math.Round(distance))
@@ -342,7 +495,7 @@ func compass(dx, dy float64) string {
 	}
 }
 
-// persists compares the nearest retained frames either side of a span to say
+// persists compares the nearest retained frames either side of a stretch to say
 // whether the region ended up looking different.
 func (a *Analyzer) persists(region image.Rectangle, start, end float64) *bool {
 	before, after := a.checkpointBefore(start), a.checkpointAfter(end)
@@ -362,8 +515,7 @@ func (a *Analyzer) persists(region image.Rectangle, start, end float64) *bool {
 				absDiff(before.pix[i+2], after.pix[i+2])) / 3
 		}
 	}
-	mean := total / float64(r.Dx()*r.Dy())
-	changed := mean > math.Max(4, a.opt.Threshold/2)
+	changed := total/float64(r.Dx()*r.Dy()) > math.Max(4, a.opt.Threshold/2)
 	return &changed
 }
 
@@ -459,6 +611,16 @@ func regionSize(r [4]int) string {
 
 func clock(t float64) string { return fmt.Sprintf("%.2fs", t) }
 
+// round trims float noise so the record stays readable and diffs cleanly.
+func (e *Event) round() {
+	e.Start, e.End, e.Peak = round2(e.Start), round2(e.End), round2(e.Peak)
+	e.PeakChanged, e.MeanChanged = round4(e.PeakChanged), round4(e.MeanChanged)
+	e.PeakDrift, e.RegionArea = round4(e.PeakDrift), round4(e.RegionArea)
+}
+
+func round2(v float64) float64 { return math.Round(v*100) / 100 }
+func round4(v float64) float64 { return math.Round(v*10000) / 10000 }
+
 // runs groups indices satisfying match into spans, joining spans separated by
 // at most gap non-matching samples.
 func runs(n int, match func(int) bool, gap int) []span {
@@ -490,43 +652,39 @@ func runs(n int, match func(int) bool, gap int) []span {
 	return out
 }
 
-// noiseFloor is a robust estimate of per-frame codec and capture noise.
-func noiseFloor(s []Sample, minimum float64) float64 {
-	values := make([]float64, len(s))
-	for i, x := range s {
-		values[i] = x.Changed
-	}
-	sort.Float64s(values)
-	median := quantile(values, 0.5)
-	deviations := make([]float64, len(values))
-	for i, v := range values {
-		deviations[i] = math.Abs(v - median)
+// robustFloor estimates noise as the median plus six median absolute
+// deviations, which adapts to the recording instead of assuming a codec.
+func robustFloor(values []float64, minimum float64) float64 {
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	m := quantile(sorted, 0.5)
+	deviations := make([]float64, len(sorted))
+	for i, v := range sorted {
+		deviations[i] = math.Abs(v - m)
 	}
 	sort.Float64s(deviations)
-	floor := median + 6*quantile(deviations, 0.5)
-	return math.Min(0.05, math.Max(minimum, floor))
+	return math.Min(0.25, math.Max(minimum, m+6*quantile(deviations, 0.5)))
 }
 
 func quantile(sorted []float64, q float64) float64 {
 	if len(sorted) == 0 {
 		return 0
 	}
-	i := int(math.Round(q * float64(len(sorted)-1)))
-	return sorted[i]
+	return sorted[int(math.Round(q*float64(len(sorted)-1)))]
 }
 
-func unionBBox(s []Sample) image.Rectangle {
-	out := image.Rectangle{}
-	for _, x := range s {
-		out = out.Union(x.BBox)
-	}
-	return out
+func median(values []float64) float64 {
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	return quantile(sorted, 0.5)
 }
 
-func unionDriftBBox(s []Sample) image.Rectangle {
-	out := image.Rectangle{}
-	for _, x := range s {
-		out = out.Union(x.DriftBBox)
+func dedupe(in []int) []int {
+	out := in[:0]
+	for i, v := range in {
+		if i == 0 || v != in[i-1] {
+			out = append(out, v)
+		}
 	}
 	return out
 }
@@ -535,7 +693,8 @@ func unionDriftBBox(s []Sample) image.Rectangle {
 func trimToBudget(events []Event, budget int) []Event {
 	ranked := append([]Event(nil), events...)
 	sort.SliceStable(ranked, func(i, j int) bool {
-		return ranked[i].PeakChanged > ranked[j].PeakChanged
+		return math.Max(ranked[i].PeakChanged, ranked[i].PeakDrift) >
+			math.Max(ranked[j].PeakChanged, ranked[j].PeakDrift)
 	})
 	keep := make(map[float64]bool, budget)
 	for _, e := range ranked[:budget] {
