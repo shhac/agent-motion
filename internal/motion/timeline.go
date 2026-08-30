@@ -44,7 +44,7 @@ type Event struct {
 	JumpSeconds float64 `json:"jump_backwards_seconds,omitempty"`
 	// MovedBy is the displacement of the content, in source pixels, when the
 	// change was a translation rather than an appearance. Positive Y is down.
-	MovedBy [2]int `json:"moved_by_pixels,omitempty"`
+	MovedBy []int `json:"moved_by_pixels,omitempty"`
 	// ShiftScore is CLS-shaped: the share of the frame affected multiplied by
 	// how far it moved as a share of the frame. It is not Chrome's Cumulative
 	// Layout Shift, which is measured from the DOM over a session window.

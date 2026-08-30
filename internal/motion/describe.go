@@ -426,7 +426,10 @@ func (e *Event) round() {
 
 // movement puts a displacement into words, because "moved down 40 px" is
 // actionable in a way that [0, 40] is not.
-func movement(by [2]int) string {
+func movement(by []int) string {
+	if len(by) < 2 {
+		return "nowhere"
+	}
 	parts := make([]string, 0, 2)
 	if by[1] != 0 {
 		parts = append(parts, fmt.Sprintf("down %d px", by[1]))

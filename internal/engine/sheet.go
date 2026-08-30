@@ -30,7 +30,7 @@ type SheetResult struct {
 	Suitability motion.Assessment `json:"suitability,omitempty"`
 	Columns     int               `json:"columns"`
 	Thumbnail   int               `json:"thumbnail_width"`
-	Region      [4]int            `json:"region_xyxy,omitempty"`
+	Region      []int             `json:"region_xyxy,omitempty"`
 	Tiles       []SheetTile       `json:"tiles"`
 	Chosen      string            `json:"timestamps_chosen_by"`
 	HowToRead   string            `json:"how_to_read"`
@@ -68,7 +68,7 @@ func (e *Engine) Sheet(ctx context.Context, opt SheetOptions) (*SheetResult, err
 		HowToRead: "Frames run left to right, top to bottom. Each caption is the tile number, its timestamp in the source video, and the event it falls inside.",
 	}
 	if !box.Empty() {
-		result.Region = [4]int{box.Min.X, box.Min.Y, box.Max.X, box.Max.Y}
+		result.Region = []int{box.Min.X, box.Min.Y, box.Max.X, box.Max.Y}
 		result.HowToRead += " Every tile is cropped to the region shown in region_xyxy, so what you see is magnified, not the whole frame."
 	}
 

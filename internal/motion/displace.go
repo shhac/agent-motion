@@ -305,7 +305,7 @@ func asShift(e Event, region image.Rectangle, moved Displacement, opt TimelineOp
 	e.RegionArea = areaFraction(e.Region, opt)
 	e.Position = positionOf(e.Region, opt)
 	e.Kind = KindShift
-	e.MovedBy = [2]int{moved.DX, moved.DY}
+	e.MovedBy = []int{moved.DX, moved.DY}
 	e.ShiftScore = shiftScore(e.RegionArea, moved.DX, moved.DY, opt)
 	e.round()
 	e.Summary = summarise(e, opt)

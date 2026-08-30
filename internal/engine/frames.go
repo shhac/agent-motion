@@ -22,7 +22,7 @@ type FrameSet struct {
 	Input  string           `json:"input"`
 	Dir    string           `json:"output_dir"`
 	Width  int              `json:"width"`
-	Region [4]int           `json:"region_xyxy,omitempty"`
+	Region []int            `json:"region_xyxy,omitempty"`
 	Frames []ExtractedFrame `json:"frames"`
 	Note   string           `json:"note"`
 }
@@ -67,7 +67,7 @@ func (e *Engine) Frames(ctx context.Context, opt FramesOptions) (*FrameSet, erro
 	width := stillWidth(opt.Width, boxOr(box, info).Dx(), !box.Empty())
 	if !box.Empty() {
 		set.Width = orElse(width, box.Dx())
-		set.Region = [4]int{box.Min.X, box.Min.Y, box.Max.X, box.Max.Y}
+		set.Region = []int{box.Min.X, box.Min.Y, box.Max.X, box.Max.Y}
 		set.Note = fmt.Sprintf("These are source frames cropped to %dx%d px at %d,%d and scaled to %d px wide. Apart from the crop and the scale they are unmodified.",
 			box.Dx(), box.Dy(), box.Min.X, box.Min.Y, set.Width)
 	}

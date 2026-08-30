@@ -247,3 +247,52 @@ func TestDuringRejectsNonsense(t *testing.T) {
 		}
 	}
 }
+
+// A result with nothing in it must still carry the fields that say so. An
+// absent `events` key is the worst form of "no events read as nothing
+// happened": a caller indexing it does not get an empty list, it gets a crash.
+// Found by a real recording of a static page, which broke the very script
+// reading it.
+func TestAnEmptyResultStillCarriesTheContract(t *testing.T) {
+	got, err := run(t, "timeline", "ref.mp4", "--threshold", "255")
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, ok := got["events"]
+	if !ok {
+		t.Fatal("events key is absent; a caller cannot tell an empty result from a malformed one")
+	}
+	if list, isList := events.([]any); !isList || len(list) != 0 {
+		t.Errorf("events = %v, want an empty list", events)
+	}
+	for _, key := range []string{"limits", "suitability", "narrative", "analysis"} {
+		if got[key] == nil {
+			t.Errorf("%q is missing from a result that found nothing, which is when it matters most", key)
+		}
+	}
+	if narrative, _ := got["narrative"].(string); !strings.Contains(narrative, "Nothing") {
+		t.Errorf("narrative should say plainly that nothing changed: %q", narrative)
+	}
+}
+
+// Optional coordinates are slices, not fixed-size arrays: omitempty has no
+// effect on an array, so an event that never moved would report moving nowhere.
+func TestNonShiftEventsCarryNoDisplacement(t *testing.T) {
+	got, err := run(t, "timeline", "ref.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := got["events"].([]any)
+	if len(events) == 0 {
+		t.Fatal("expected events")
+	}
+	for _, raw := range events {
+		e, _ := raw.(map[string]any)
+		if e["kind"] == "shift" {
+			continue
+		}
+		if _, present := e["moved_by_pixels"]; present {
+			t.Errorf("a %v event reports moved_by_pixels: %v", e["kind"], e["moved_by_pixels"])
+		}
+	}
+}

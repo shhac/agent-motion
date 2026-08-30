@@ -16,7 +16,7 @@ type Comparison struct {
 	Input     string  `json:"input"`
 	First     float64 `json:"first_seconds"`
 	Second    float64 `json:"second_seconds"`
-	Region    [4]int  `json:"region_xyxy,omitempty"`
+	Region    []int   `json:"region_xyxy,omitempty"`
 	Identical bool    `json:"identical"`
 	Changed   int     `json:"changed_pixels"`
 	Compared  int     `json:"compared_pixels"`
@@ -25,7 +25,7 @@ type Comparison struct {
 	MeanDelta float64 `json:"mean_pixel_delta"`
 	Threshold float64 `json:"threshold"`
 	// Differs bounds the changed pixels, in source coordinates.
-	Differs   [4]int `json:"differs_within_xyxy,omitempty"`
+	Differs   []int  `json:"differs_within_xyxy,omitempty"`
 	Output    string `json:"output,omitempty"`
 	Verdict   string `json:"verdict"`
 	Note      string `json:"note,omitempty"`
@@ -86,11 +86,11 @@ func (e *Engine) Compare(ctx context.Context, opt CompareOptions) (*Comparison, 
 	}
 	offsetX, offsetY := 0, 0
 	if !box.Empty() {
-		result.Region = [4]int{box.Min.X, box.Min.Y, box.Max.X, box.Max.Y}
+		result.Region = []int{box.Min.X, box.Min.Y, box.Max.X, box.Max.Y}
 		offsetX, offsetY = box.Min.X, box.Min.Y
 	}
 	if !d.Box.Empty() {
-		result.Differs = [4]int{
+		result.Differs = []int{
 			d.Box.Min.X + offsetX, d.Box.Min.Y + offsetY,
 			d.Box.Max.X + offsetX, d.Box.Max.Y + offsetY,
 		}

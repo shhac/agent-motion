@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -243,7 +244,7 @@ func TestSheetCropsToARegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := [4]int{490, 290, 570, 334}; result.Region != want {
+	if want := []int{490, 290, 570, 334}; !slices.Equal(result.Region, want) {
 		t.Errorf("region = %v, want the padded box %v", result.Region, want)
 	}
 }

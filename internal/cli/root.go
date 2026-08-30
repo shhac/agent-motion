@@ -35,7 +35,7 @@ func (g *globals) print(cmd *cobra.Command, value any) error {
 	if err != nil {
 		return err
 	}
-	return output.Print(cmd.OutOrStdout(), value, format, output.PruneEmpty)
+	return output.Print(cmd.OutOrStdout(), value, format, output.PruneNils)
 }
 
 // newRoot builds the command tree. A non-nil decoder replaces locally
