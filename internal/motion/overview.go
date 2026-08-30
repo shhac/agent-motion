@@ -311,6 +311,9 @@ func settledAt(events []Event, end float64) (*float64, bool) {
 func structural(events []Event) []Event {
 	var out []Event
 	for _, e := range events {
+		if e.Continuous {
+			continue // one step of an animation is not the content settling
+		}
 		switch e.Kind {
 		case KindCut, KindFlash, KindShift, KindStep, KindBlip:
 			out = append(out, e)

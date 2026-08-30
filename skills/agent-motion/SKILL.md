@@ -134,6 +134,11 @@ that broke it.
 `--max-shift-score`, `--max-shift-pixels`, `--no-shift`, `--no-stall`,
 `--no-flicker`, `--quiet`.
 
+Shifts marked `continuous` are not counted against a shift limit. A ticker
+sliding two pixels at a time is a real translation every time, and a gate that
+failed every page with a marquee is a gate nobody would leave switched on. The
+result says how many it ignored.
+
 If the recording is one the tool cannot judge — a scroll, a pan, ambient motion
 — the result says so in `notes`. A pass on footage like that means nothing, and
 it will tell you.

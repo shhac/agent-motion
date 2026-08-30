@@ -7,6 +7,7 @@ import (
 
 	"github.com/shhac/agent-motion/internal/engine"
 	"github.com/shhac/agent-motion/internal/fixture"
+	"github.com/shhac/agent-motion/internal/motion"
 )
 
 func layoutEngine() *engine.Engine { return engine.New(fixture.Layout().Decoder()) }
@@ -110,5 +111,30 @@ func TestCheckWarnsWhenTheRecordingCannotBeJudged(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(result.Notes, " "), "not the kind the tool can judge") {
 		t.Errorf("notes = %q, want a warning that the assertions are meaningless here", result.Notes)
+	}
+}
+
+// A page with a marquee must not fail a layout-shift gate. A ticker sliding two
+// pixels at a time is a real translation every time, and on a real Forbes
+// recording it produced seven of them — all true, none of them the fault anyone
+// is gating on. A gate that fails every page with a ticker is a gate nobody
+// leaves switched on.
+func TestOngoingMovementDoesNotFailAShiftGate(t *testing.T) {
+	events := []motion.Event{
+		{Kind: motion.KindShift, Start: 3.17, MovedBy: []int{-2, 0}, ShiftScore: 0.02, Continuous: true},
+		{Kind: motion.KindShift, Start: 7.13, MovedBy: []int{-2, 0}, ShiftScore: 0.02, Continuous: true},
+	}
+	gate := engine.WorstShiftFor(events, 0.001)
+	if !gate.Passed {
+		t.Errorf("ongoing movement failed the gate: %s", gate.Detail)
+	}
+	if !strings.Contains(gate.Detail, "not counted") {
+		t.Errorf("a pass must say what it ignored: %q", gate.Detail)
+	}
+
+	// The same measurement, not marked ongoing, is exactly what the gate is for.
+	events[0].Continuous = false
+	if engine.WorstShiftFor(events, 0.001).Passed {
+		t.Error("a one-off shift over the limit should fail")
 	}
 }

@@ -259,6 +259,8 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		}
 	}
 
+	markOngoingShifts(out, opt)
+
 	kept := out[:0]
 	for i := range out {
 		// A joined pair leaves its partner behind: it is now described by the
@@ -292,6 +294,42 @@ func resolveWholeFrame(events []Event, opt TimelineOptions, fps float64, at func
 		events[i].ShadeResidual, events[i].ShadeScale, events[i].Uniform = residual, scale, uniform
 		events[i].Summary = wholeFrameSummary(events[i])
 	}
+}
+
+// markOngoingShifts flags a translation that is one step of something already
+// moving, rather than a discrete layout shift.
+//
+// A news ticker sliding two pixels at a time is a real translation every time,
+// and on a real Forbes recording it produced seven separate "layout shifts" in
+// one horizontal strip. They are all true and none of them is the fault anyone
+// is looking for: a layout shift is a one-off, and a marquee is not. The tell
+// is that the region is already busy for most of the recording.
+func markOngoingShifts(events []Event, opt TimelineOptions) {
+	for i := range events {
+		if events[i].Kind != KindShift {
+			continue
+		}
+		for j := range events {
+			if i == j || !longRunning(events[j], opt) {
+				continue
+			}
+			if !overlapping(events[i].Region, events[j].Region) {
+				continue
+			}
+			if events[i].Peak < events[j].Start || events[i].Peak > events[j].End {
+				continue
+			}
+			events[i].Continuous = true
+			events[i].Summary += " It sits inside activity that runs in the same place for most of the recording, so it is one step of something moving continuously rather than a one-off layout shift."
+			break
+		}
+	}
+}
+
+// longRunning reports an event that occupies enough of the interval to be the
+// backdrop other events happen against.
+func longRunning(e Event, opt TimelineOptions) bool {
+	return e.Kind != KindShift && opt.Span > 0 && (e.End-e.Start)/opt.Span >= continuousShare
 }
 
 func measureShift(before, after image.Image, region image.Rectangle, opt TimelineOptions) Displacement {

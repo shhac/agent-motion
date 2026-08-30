@@ -118,12 +118,26 @@ func (r *CheckResult) add(a Assertion) {
 	}
 }
 
+// WorstShiftFor is exported for tests: it asserts that no one-off shift exceeds
+// a limit.
+func WorstShiftFor(events []motion.Event, limit float64) Assertion {
+	return worstShift(events, limit, "max-shift-score",
+		func(e motion.Event) float64 { return e.ShiftScore }, "layout shift score")
+}
+
 // worstShift asserts that no shift exceeds a limit, and names the worst one.
 func worstShift(events []motion.Event, limit float64, name string, measure func(motion.Event) float64, unit string) Assertion {
 	a := Assertion{Name: name, Passed: true, Limit: round4(limit)}
 	var worst *motion.Event
+	ignored := 0
 	for i := range events {
 		if events[i].Kind != motion.KindShift {
+			continue
+		}
+		// A ticker step is a real translation and not what a layout-shift gate
+		// is for; counting it would fail every page with a marquee.
+		if events[i].Continuous {
+			ignored++
 			continue
 		}
 		if value := measure(events[i]); value > a.Worst {
@@ -131,7 +145,7 @@ func worstShift(events []motion.Event, limit float64, name string, measure func(
 		}
 	}
 	if worst == nil {
-		a.Detail = fmt.Sprintf("no layout shift found, so %s stayed at 0 (limit %g)", unit, limit)
+		a.Detail = fmt.Sprintf("no layout shift found, so %s stayed at 0 (limit %g)%s", unit, limit, excluded(ignored))
 		return a
 	}
 	a.Culprit = worst.Summary
@@ -146,9 +160,14 @@ func worstShift(events []motion.Event, limit float64, name string, measure func(
 
 // absent asserts that no event of a kind occurred.
 func absent(events []motion.Event, kind, name, what string) Assertion {
-	a := Assertion{Name: name, Passed: true, Detail: "none found: " + what + " nowhere in the recording"}
+	a := Assertion{Name: name, Passed: true}
 	var found []string
+	ignored := 0
 	for _, e := range events {
+		if kind == motion.KindShift && e.Kind == kind && e.Continuous {
+			ignored++
+			continue
+		}
 		if e.Kind == kind {
 			found = append(found, fmt.Sprintf("%.2fs", e.Start))
 			if a.Culprit == "" {
@@ -159,8 +178,22 @@ func absent(events []motion.Event, kind, name, what string) Assertion {
 	if len(found) > 0 {
 		a.Passed = false
 		a.Detail = fmt.Sprintf("%s at %s", what, strings.Join(found, ", "))
+		return a
 	}
+	a.Detail = "none found: " + what + " nowhere in the recording" + excluded(ignored)
 	return a
+}
+
+// excluded names the movement that was deliberately not counted, so a pass is
+// never quieter than it should be about what it chose to ignore.
+func excluded(n int) string {
+	if n == 0 {
+		return ""
+	}
+	if n == 1 {
+		return " (1 step of ongoing movement was not counted; a marquee is not a layout shift)"
+	}
+	return fmt.Sprintf(" (%d steps of ongoing movement were not counted; a marquee is not a layout shift)", n)
 }
 
 func abs(v int) int {

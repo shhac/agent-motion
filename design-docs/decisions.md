@@ -24,6 +24,39 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D29 — A marquee is not a layout shift
+
+Eight real screen recordings of ad-supported news pages, captured properly:
+ffmpeg AVFoundation, constant 30fps, CRF 18, cropped to the viewport.
+
+The best result is that the two controls found **nothing at all** — zero pixels
+above threshold across fifteen seconds, verified with `compare`, on a page that
+was reloaded mid-recording. No false positives on real footage.
+
+The worst was that Forbes reported seven separate layout shifts, all "moved left
+2px", all in one horizontal strip. They are all true: the TRENDING ticker really
+does slide two pixels at a time. None of them is the fault anyone is gating on.
+A layout shift is a one-off; a marquee is not, and the tell is that the region
+is already busy for most of the recording.
+
+Such shifts are now marked `continuous`, excluded from
+`layout_settled_at_seconds`, and not counted by `check` against a shift limit —
+which is reported rather than silent, because a gate that quietly ignores things
+is worse than one that fails. Measured after: the real Forbes page passes a
+`--no-shift` gate while the real browser reflow of D28 still fails it. That
+pairing is what makes the gate worth switching on.
+
+The overlay detection from D26 was confirmed on the same recording, on footage
+it was never tuned against: the consent backdrop at 0.93s is reported as a
+uniform brightness change scaled to 44%, and the contact sheet shows exactly
+that — the page visibly dimming behind the privacy panel.
+
+Two caveats on this batch, from the sidecars: the pages were preloaded and then
+reloaded, so these are warm reloads rather than cold navigations, and the
+`observed` notes describe the end state rather than what moved. The ground truth
+is therefore weaker than the fixtures', and the conclusions above rest on what
+is checkable in the pixels.
+
 ## D28 — A real reflow, and the two false positives it exposed
 
 The layout fixture translates solid blocks, so it could not answer whether shift

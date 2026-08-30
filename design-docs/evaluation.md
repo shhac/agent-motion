@@ -178,6 +178,25 @@ Both are now refused, on measurements rather than intuition: the true vertical
 offset leaves a residual of 0.05 of the profile's own spread, the spurious
 horizontal one leaves 3.3, and a blank page leaves a spread of 0.000.
 
+## Eight real page recordings
+
+Captured externally to the instructions in `capture-real-recordings.md`: ffmpeg
+AVFoundation screen capture of a real browser, constant 30fps, CRF 18, cropped
+to a 1280x800 viewport, fifteen seconds each. Six ad-supported news pages and
+two stable controls.
+
+| Result | Evidence |
+|---|---|
+| No false positives on the controls | Wikipedia and Hacker News report **zero events**; `compare` confirms zero pixels above threshold across the full fifteen seconds, max single-pixel delta 7/255 |
+| The overlay test holds on footage it was not tuned against | Forbes' consent backdrop is reported as a uniform brightness change scaled to 44%; the contact sheet shows the page visibly dimming |
+| A marquee looked like seven layout shifts | Forbes' TRENDING ticker slides 2px at a time, and each step is a real translation. Now marked `continuous` and excluded from the gate — see D29 |
+| An empty result dropped its own contract | `events` vanished when empty, crashing the script reading it. Fixed, with a test |
+
+They are warm reloads rather than cold navigations, and the sidecar `observed`
+notes describe the end state rather than what moved, so their ground truth is
+weaker than the fixtures'. Everything concluded from them is checkable in the
+pixels.
+
 ## Agent trials
 
 The tool is for agents, so it is tested by giving agents a video and no context

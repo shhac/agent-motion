@@ -144,6 +144,11 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 		FPS: opt.SampleFPS, SourceWidth: info.Width, SourceHeight: info.Height,
 		DriftSeconds: opt.DriftSeconds, CutFraction: CutFraction, MaxEvents: opt.MaxEvents,
 	}
+	// Timeline fills Span in on its own copy; the second pass needs it too, to
+	// tell a one-off shift from one step of something already moving.
+	spanStart, spanEnd := analyzer.Span()
+	timelineOptions.Span = spanEnd - spanStart
+
 	timeline := analyzer.Timeline(timelineOptions)
 	// Whether a brief change was content moving or content appearing needs the
 	// frames themselves, so it happens here rather than in the analysis pass —
@@ -156,7 +161,6 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 	if !opt.Series {
 		overview.Activity = nil
 	}
-	spanStart, spanEnd := analyzer.Span()
 
 	// The analyser may have shortened the slow window to fit its memory budget;
 	// report what was actually used, not what was asked for.

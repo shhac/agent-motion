@@ -29,7 +29,7 @@
 | `region_area_fraction` | That box as a fraction of the frame. |
 | `position` | The third of the frame it sits in, e.g. `bottom right`. |
 | `persists` | Whether the region still looks different afterwards. Absent when it could not be compared. |
-| `continuous` | Set when activity runs steadily in one small fixed place for much of the interval — the shape of animation rather than a fault. A claim about shape only: the tool cannot tell a marquee from a stuck render. |
+| `continuous` | Set when activity runs steadily in one small fixed place for much of the interval, or when a `shift` is one step of movement already running there — the shape of animation rather than a fault. A claim about shape only: the tool cannot tell a marquee from a stuck render. `check` does not count continuous shifts against a layout-shift limit. |
 | `moved_by_pixels` | Set on a `shift`: how far the content moved, in source pixels, positive Y down. Measured from the real frames either side, so it is exact regardless of `--analysis-width`. |
 | `layout_shift_score` | Share of the frame affected times how far it moved. CLS-shaped, not Chrome's CLS. Use it to rank and threshold. |
 | `direction`, `travel_pixels` | Set when the active centre moves. |
