@@ -14,6 +14,7 @@ const (
 	KindMotion  = "motion"  // activity whose centre travels across the frame
 	KindGradual = "gradual" // too slow to see frame to frame, clear over the drift window
 	KindBusy    = "busy"    // sustained activity with no clearer shape
+	KindStall   = "stall"   // activity that was running continuously stopped, then resumed
 )
 
 // Event is one described occurrence in source-video coordinates and seconds.
@@ -73,6 +74,8 @@ func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 			events = append(events, e)
 		}
 	}
+	sort.Slice(events, func(i, j int) bool { return events[i].Start < events[j].Start })
+	events = append(events, stalls(events, a.samples)...)
 	sort.Slice(events, func(i, j int) bool { return events[i].Start < events[j].Start })
 
 	start, end := a.Span()

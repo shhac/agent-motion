@@ -16,8 +16,11 @@ they are not the product. See `design-docs/vision.md`.
   NDJSON. `--format json|yaml|jsonl` overrides either default.
 - Every failure is one JSON object on stderr with `fixable_by`
   (`agent` | `human` | `retry`) and an actionable `hint` where possible.
-- Every analysis result must carry `limits` and `next_steps`. A caller must
-  never be able to read "no events" as "nothing happened".
+- Every analysis result must carry `limits`, `next_steps` and `suitability`. A
+  caller must never be able to read "no events" as "nothing happened", nor read
+  events from unsuitable footage as findings.
+- An image must state what it leaves out, in the image. Disclosing it only in
+  metadata is how a reader concludes nothing happened where plenty did.
 - Event kinds name the *shape* of a change, never its meaning. Do not add a
   kind that asserts what something is.
 - Never present an activity image as a reconstruction or as ground truth. Its
@@ -61,6 +64,7 @@ of these in the same change:
 - `design-docs/architecture.md` — packages, the decoder seam, memory
 - `design-docs/cli-design.md` — command and output contract
 - `design-docs/behavior-reference.md` — detection and image semantics
-- `design-docs/evaluation.md` — the reference scenario and how it is scored
+- `design-docs/evaluation.md` — the reference scenarios and how they are scored
+- `design-docs/agent-trials.md` — what agents given only the tool actually said
 - `design-docs/decisions.md` — what changed and what forced it
 - `design-docs/archived/` — superseded documents, kept for the reasoning

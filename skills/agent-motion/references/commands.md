@@ -42,11 +42,19 @@ Writes one PNG of many labelled frames.
 
 | Flag | Default | Meaning |
 |---|---:|---|
-| `--at` | analysis chooses | Timestamps in seconds, e.g. `--at 3.4,7.1`. Skips analysis. |
+| `--at` | analysis chooses | Timestamps in seconds, e.g. `--at 3.4,7.1`. |
 | `--count` | 12 | How many frames when the analysis chooses. |
 | `--columns` | auto | Grid columns. |
-| `--width` | 320 | Thumbnail width. |
+| `--width` | 320 | Thumbnail width. With `--region`, this magnifies the crop. |
+| `--region` | none | Crop every tile to `x0,y0,x1,y1` in source pixels. Takes an event's `region_xyxy` verbatim. |
+| `--pad` | 0 | Widen `--region` by this many pixels on every side. |
+| `--quick` | off | Skip the analysis pass. Faster, but tiles lose their event labels. |
 | `--output`, `-o` | `<video>.sheet.png` | Destination PNG. |
+
+The sheet analyses the video even when you pass `--at`, so every tile is
+labelled with the event it falls inside; `--quick` opts out. With `--at` the
+result carries `narrative` and `suitability` but not the full analysis, which
+you have already got if you ran `timeline`.
 
 ## `project <video>`
 
@@ -66,7 +74,13 @@ Writes real source frames.
 |---|---:|---|
 | `--at` | required | Timestamps in seconds. |
 | `--dir` | `<video>.frames` | Destination directory. |
-| `--width` | source width | Scale frames to this width. |
+| `--width` | source width | Scale frames to this width. With `--region`, this magnifies the crop. |
+| `--region` | none | Crop to `x0,y0,x1,y1` in source pixels. Takes an event's `region_xyxy` verbatim. |
+| `--pad` | 0 | Widen `--region` by this many pixels on every side. |
+
+Cropping happens before scaling, so `--region 200,120,202,160 --pad 24 --width
+480` returns that region enlarged rather than a shrunken whole frame. This is
+how you look at something too small to see in a full-frame still.
 
 ## `usage`
 

@@ -67,4 +67,7 @@ and asking what they can tell. Trials run in a scratch directory containing
 only the binary, the skill and the media — no repository, no source, no ground
 truth — so a trial cannot be contaminated by knowing the answer.
 
-Findings and the changes they forced are recorded in `agent-trials.md`.
+Findings and the changes they forced are recorded in
+[`agent-trials.md`](agent-trials.md). Round 1 forced six changes; three of them
+— stalls, region cropping, and the activity image naming its own omissions —
+came from things an agent had to leave the tool to work out for itself.

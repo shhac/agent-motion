@@ -1,6 +1,9 @@
 package video
 
-import "testing"
+import (
+	"image"
+	"testing"
+)
 
 func TestRatioReadsFFprobeFrameRates(t *testing.T) {
 	cases := map[string]float64{
@@ -148,19 +151,25 @@ func TestDecodeArgsHoldTheDeterminismContract(t *testing.T) {
 }
 
 func TestStillArgsScaleOnlyWhenAsked(t *testing.T) {
-	full := stillArgs("clip.mp4", 3.5, 0)
+	full := stillArgs("clip.mp4", Still{At: 3.5})
 	if indexOf(full, "-vf") >= 0 {
 		t.Errorf("width 0 means native size, so no filter: %v", full)
 	}
 	if indexOf(full, "-frames:v") < 0 {
 		t.Errorf("a still must ask for exactly one frame: %v", full)
 	}
-	scaled := stillArgs("clip.mp4", 0, 320)
+	scaled := stillArgs("clip.mp4", Still{Width: 320})
 	if i := indexOf(scaled, "-vf"); i < 0 || scaled[i+1] != "scale=320:-2" {
 		t.Errorf("scaled still args = %v", scaled)
 	}
 	if indexOf(scaled, "-ss") >= 0 {
 		t.Errorf("a still at zero should not seek: %v", scaled)
+	}
+	// Cropping must come before scaling, or asking for a small region at a
+	// given width returns a shrunken whole frame instead of a magnified region.
+	cropped := stillArgs("clip.mp4", Still{At: 1, Width: 480, Crop: image.Rect(10, 20, 110, 80)})
+	if i := indexOf(cropped, "-vf"); i < 0 || cropped[i+1] != "crop=100:60:10:20,scale=480:-2" {
+		t.Errorf("cropped still args = %v", cropped)
 	}
 }
 

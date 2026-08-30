@@ -5,9 +5,11 @@
 ```text
 agent-motion inspect  <video>
 agent-motion timeline <video> [analysis flags]
-agent-motion sheet    <video> [--at ...] [--count N] [--columns N] [--width N] [-o path]
+agent-motion sheet    <video> [--at ...] [--count N] [--columns N] [--width N]
+                              [--region x0,y0,x1,y1] [--pad N] [--quick] [-o path]
 agent-motion project  <video> [analysis flags] [-o path] [--legend]
 agent-motion frames   <video> --at ... [--dir path] [--width N]
+                              [--region x0,y0,x1,y1] [--pad N]
 agent-motion usage
 ```
 
@@ -36,18 +38,36 @@ the default. Keys are sorted, matching the family convention.
 The fields an agent is expected to read, in order: `narrative`, `events`,
 `limits`, `next_steps`. Everything else is detail.
 
-Three fields are load-bearing and must not be quietly dropped:
+Four fields are load-bearing and must not be quietly dropped:
+
+- **`suitability`** says whether the events mean anything at all. Without it,
+  footage where everything moves returns a list of confident findings that are
+  fragments of one moving scene.
 
 - **`limits`** states what the run could not have seen. Without it, "no events"
   reads as "nothing happened", which is the most likely way this tool misleads.
 - **`next_steps`** gives runnable commands. It is what makes the temporal zoom
   loop something an agent falls into rather than has to invent.
 - **`encoding`**, on `project`, defines the image. It is the API for the PNG;
-  an agent must never infer channel meaning from colour.
+  an agent must never infer channel meaning from colour. `omitted_from_image`
+  is part of the same contract and is drawn into the legend band as well, so a
+  reader who looks at the picture before the JSON still sees it.
 
 The activity series is a sparkline string by default. Sixty pretty-printed
 floats cost far more than they tell you; the numbers are available behind
 `--series` for a caller that wants them.
+
+## Cropping
+
+`--region` takes the four numbers an event already reports in `region_xyxy`, so
+a region can be pasted straight from a result with no arithmetic. Cropping
+happens before scaling, so `--width` magnifies the region rather than shrinking
+the frame around it — which is the entire point, since the features this tool
+finds are routinely a few pixels across.
+
+`sheet` analyses even when given `--at`, so tiles carry event labels; with
+`--at` it returns `narrative` and `suitability` but not the full analysis,
+which the caller has already got if they ran `timeline`.
 
 ## Naming
 

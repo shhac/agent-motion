@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"errors"
+	"image"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -187,20 +188,80 @@ func TestSheetChoosesItsOwnMomentsWhenNoneGiven(t *testing.T) {
 	}
 }
 
-func TestSheetUsesGivenTimestampsWithoutAnalysing(t *testing.T) {
+// Given timestamps, the sheet still analyses: an unlabelled tile makes the
+// reader match times to events by hand, and a blank-looking tile is
+// indistinguishable from a broken one. What it drops is the bulky analysis
+// blob, which a caller who passed --at has usually already got.
+func TestSheetWithTimestampsStillLabelsTiles(t *testing.T) {
 	dec, _ := referenceDecoder()
 	result, err := engine.New(dec).Sheet(context.Background(), engine.SheetOptions{
-		Path: "ref.mp4", At: []float64{1, 2, 3}, Width: 160,
-		Output: filepath.Join(t.TempDir(), "sheet.png"),
+		Path: "ref.mp4", At: []float64{3.5, 9.5, 15}, Width: 160,
+		Output:  filepath.Join(t.TempDir(), "sheet.png"),
+		Analyse: engine.AnalyseOptions{Path: "ref.mp4"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Analysis != nil {
-		t.Error("passing --at should skip the analysis pass entirely")
+		t.Error("with --at the full analysis blob should be left out")
+	}
+	if result.Narrative == "" || result.Suitability.Verdict == "" {
+		t.Error("a sheet must still say what kind of recording this is")
+	}
+	labelled := 0
+	for _, tile := range result.Tiles {
+		if tile.Event != "" {
+			labelled++
+		}
+	}
+	if labelled == 0 {
+		t.Errorf("tiles inside an event should name it, got %+v", result.Tiles)
+	}
+}
+
+func TestSheetQuickSkipsTheAnalysisPass(t *testing.T) {
+	dec, _ := referenceDecoder()
+	result, err := engine.New(dec).Sheet(context.Background(), engine.SheetOptions{
+		Path: "ref.mp4", At: []float64{1, 2, 3}, Width: 160, Quick: true,
+		Output: filepath.Join(t.TempDir(), "sheet.png"),
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if len(dec.Requests) != 0 {
-		t.Errorf("no interval should have been decoded, got %v", dec.Requests)
+		t.Errorf("--quick should decode no interval, got %v", dec.Requests)
+	}
+	if result.Analysis != nil || result.Narrative != "" {
+		t.Error("--quick should return no analysis at all")
+	}
+}
+
+func TestSheetCropsToARegion(t *testing.T) {
+	dec, _ := referenceDecoder()
+	result, err := engine.New(dec).Sheet(context.Background(), engine.SheetOptions{
+		Path: "ref.mp4", At: []float64{7}, Width: 240, Quick: true,
+		Region: engine.Region{Box: image.Rect(500, 300, 560, 324), Pad: 10},
+		Output: filepath.Join(t.TempDir(), "sheet.png"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := [4]int{490, 290, 570, 334}; result.Region != want {
+		t.Errorf("region = %v, want the padded box %v", result.Region, want)
+	}
+}
+
+func TestRegionPaddingStaysInsideTheFrame(t *testing.T) {
+	info := fixture.Reference().Info()
+	got := engine.Region{Box: image.Rect(0, 0, 40, 40), Pad: 100}.Rect(info)
+	if got.Min.X != 0 || got.Min.Y != 0 {
+		t.Errorf("padding must not go negative, got %v", got)
+	}
+	if got.Max.X > info.Width || got.Max.Y > info.Height {
+		t.Errorf("padding must not exceed the frame, got %v", got)
+	}
+	if empty := (engine.Region{}); !empty.Rect(info).Empty() {
+		t.Error("no region means no crop")
 	}
 }
 

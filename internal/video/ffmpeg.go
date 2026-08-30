@@ -177,17 +177,30 @@ func decodeArgs(req Request) []string {
 		"-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1")
 }
 
-// stillArgs builds the single-frame command line.
-func stillArgs(path string, at float64, width int) []string {
+// stillArgs builds the single-frame command line. Cropping happens before
+// scaling, so a small region asked for at a given width comes back magnified
+// rather than shrunk into the corner of a full frame.
+func stillArgs(path string, still Still) []string {
 	args := []string{"-v", "error"}
-	if at > 0 {
-		args = append(args, "-ss", seconds(at))
+	if still.At > 0 {
+		args = append(args, "-ss", seconds(still.At))
 	}
 	args = append(args, "-i", path, "-frames:v", "1", "-an", "-sn", "-dn")
-	if width > 0 {
-		args = append(args, "-vf", fmt.Sprintf("scale=%d:-2", width))
+	if filter := stillFilter(still); filter != "" {
+		args = append(args, "-vf", filter)
 	}
 	return append(args, "-f", "image2", "-c:v", "png", "pipe:1")
+}
+
+func stillFilter(still Still) string {
+	var stages []string
+	if r := still.Crop; !r.Empty() {
+		stages = append(stages, fmt.Sprintf("crop=%d:%d:%d:%d", r.Dx(), r.Dy(), r.Min.X, r.Min.Y))
+	}
+	if still.Width > 0 {
+		stages = append(stages, fmt.Sprintf("scale=%d:-2", still.Width))
+	}
+	return strings.Join(stages, ",")
 }
 
 // filters pins both the frame rate and the frame size so the raw stream has a
@@ -196,18 +209,18 @@ func filters(req Request) string {
 	return fmt.Sprintf("fps=%s,scale=%d:%d", seconds(req.FPS), req.Width, req.Height)
 }
 
-// Still decodes a single frame at a timestamp and returns it as PNG bytes.
-func (f *FFmpeg) Still(ctx context.Context, path string, at float64, width int) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, f.FFmpegPath, stillArgs(path, at, width)...)
+// Still decodes a single frame and returns it as PNG bytes.
+func (f *FFmpeg) Still(ctx context.Context, path string, still Still) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, f.FFmpegPath, stillArgs(path, still)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()
 	if err != nil {
-		return nil, output.Wrap(fmt.Errorf("ffmpeg still at %.3fs: %w", at, err), output.FixableByAgent).
+		return nil, output.Wrap(fmt.Errorf("ffmpeg still at %.3fs: %w", still.At, err), output.FixableByAgent).
 			WithHint(hintOrDefault(stderr.String(), "the timestamp may be past the end of the video"))
 	}
 	if len(raw) == 0 {
-		return nil, output.New(fmt.Sprintf("no frame decoded at %.3fs", at), output.FixableByAgent).
+		return nil, output.New(fmt.Sprintf("no frame decoded at %.3fs", still.At), output.FixableByAgent).
 			WithHint("choose a timestamp inside the video duration")
 	}
 	return raw, nil

@@ -147,7 +147,7 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 		PeakBucket:  overview.PeakBucket,
 		Activity:    seriesOrNil(overview.Activity, opt.Series),
 		Inspect:     overview.Inspect,
-		NextSteps:   nextSteps(opt.Path, overview, timeline),
+		NextSteps:   nextSteps(opt, overview, timeline),
 		Limits:      limits(width, info.Width, opt.Threshold, timeline.Fit),
 		analyzer:    analyzer,
 	}, nil

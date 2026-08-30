@@ -54,6 +54,9 @@ func Sheet(tiles []Tile, opt SheetOptions) *image.RGBA {
 		x := gap + col*(cellW+gap)
 		y := gap + row*(cellH+captionBand+gap)
 		draw.Draw(img, image.Rect(x, y, x+cellW, y+cellH), t.Image, t.Image.Bounds().Min, draw.Src)
+		// A hairline marks where the frame ends. Without it an all-white frame
+		// — a real flash, say — is indistinguishable from a blank tile.
+		outline(img, image.Rect(x, y, x+cellW, y+cellH))
 		// The caption sits below the frame rather than on it: text drawn over a
 		// light frame is unreadable, and an overlay hides source pixels.
 		fillRect(img, image.Rect(x, y+cellH, x+cellW, y+cellH+captionBand), panel)
@@ -74,6 +77,14 @@ func autoColumns(n int) int {
 	default:
 		return 6
 	}
+}
+
+// outline draws a one-pixel border just inside a rectangle.
+func outline(dst *image.RGBA, r image.Rectangle) {
+	fillRect(dst, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1), hairline)
+	fillRect(dst, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y), hairline)
+	fillRect(dst, image.Rect(r.Min.X, r.Min.Y, r.Min.X+1, r.Max.Y), hairline)
+	fillRect(dst, image.Rect(r.Max.X-1, r.Min.Y, r.Max.X, r.Max.Y), hairline)
 }
 
 func fit(text string, width int) string {

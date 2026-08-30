@@ -8,19 +8,55 @@ import (
 )
 
 // nextSteps turns findings into commands the caller can run verbatim.
-func nextSteps(path string, o motion.Overview, t motion.Timeline) []string {
+func nextSteps(opt AnalyseOptions, o motion.Overview, t motion.Timeline) []string {
+	path := quote(opt.Path)
 	var steps []string
 	if len(o.Inspect) > 0 {
-		steps = append(steps, fmt.Sprintf("agent-motion sheet %s --at %s", quote(path), joinTimes(o.Inspect)))
+		steps = append(steps, fmt.Sprintf("agent-motion sheet %s --at %s", path, joinTimes(o.Inspect)))
+	}
+	if small := smallest(t.Events); small != nil {
+		// A region a few pixels across is invisible in a full-frame still, so
+		// point at a crop rather than leaving the reader to find one.
+		steps = append(steps, fmt.Sprintf("agent-motion frames %s --at %.2f --region %d,%d,%d,%d --pad 24 --width 480",
+			path, small.Peak, small.Region[0], small.Region[1], small.Region[2], small.Region[3]))
 	}
 	if narrow := narrowest(t.Events); narrow != nil {
-		steps = append(steps, fmt.Sprintf("agent-motion timeline %s --start %.2f --end %.2f --threshold 4",
-			quote(path), math.Max(0, narrow.Start-0.5), narrow.End+0.5))
+		start, end := math.Max(0, narrow.Start-0.5), narrow.End+0.5
+		threshold := opt.Threshold / 3
+		// Proposing the interval and threshold that just ran is a no-op loop.
+		if !sameRun(opt, start, end, threshold) {
+			steps = append(steps, fmt.Sprintf("agent-motion timeline %s --start %.2f --end %.2f --threshold %.0f",
+				path, start, end, math.Max(1, threshold)))
+		}
 	}
-	if len(t.Events) == 0 {
-		steps = append(steps, fmt.Sprintf("agent-motion timeline %s --threshold 4  # nothing found at the current threshold", quote(path)))
+	if len(t.Events) == 0 && opt.Threshold > 4 {
+		steps = append(steps, fmt.Sprintf("agent-motion timeline %s --threshold 4  # nothing cleared a threshold of %.0f", path, opt.Threshold))
+	}
+	if len(t.Events) == 0 && !opt.Native {
+		steps = append(steps, fmt.Sprintf("agent-motion timeline %s --native  # look at full resolution", path))
 	}
 	return steps
+}
+
+// sameRun reports whether a proposed narrowing is what the caller already did.
+func sameRun(opt AnalyseOptions, start, end, threshold float64) bool {
+	return math.Abs(opt.Start-start) < 0.01 &&
+		math.Abs(opt.End-end) < 0.01 &&
+		math.Abs(opt.Threshold-threshold) < 0.01
+}
+
+// smallest picks the event hardest to see at full-frame scale.
+func smallest(events []motion.Event) *motion.Event {
+	var best *motion.Event
+	for i := range events {
+		if events[i].RegionArea == 0 || events[i].RegionArea > 0.05 {
+			continue
+		}
+		if best == nil || events[i].RegionArea < best.RegionArea {
+			best = &events[i]
+		}
+	}
+	return best
 }
 
 // narrowest picks the event most likely to reward a closer look: the shortest

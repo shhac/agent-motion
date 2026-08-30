@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/shhac/agent-motion/internal/video"
 	output "github.com/shhac/lib-agent-output"
 )
 
@@ -43,16 +44,44 @@ func sortedUnique(in []float64) []float64 {
 	return slices.Compact(out)
 }
 
-func scaleWidth(requested, source int) int {
-	if requested <= 0 || requested >= source {
+// Region is a crop rectangle in source pixels, optionally padded outwards so a
+// thin feature is not flush against the edge of the picture.
+type Region struct {
+	Box image.Rectangle
+	Pad int
+}
+
+// Rect returns the padded crop clamped to the frame, or an empty rectangle when
+// no region was asked for.
+func (r Region) Rect(info video.Info) image.Rectangle {
+	if r.Box.Empty() {
+		return image.Rectangle{}
+	}
+	return r.Box.Inset(-r.Pad).Intersect(image.Rect(0, 0, info.Width, info.Height))
+}
+
+// stillWidth decides the output width of a still. A full frame is never
+// upscaled — a default of 320 should not blow up a small video — but a crop is
+// scaled to exactly what was asked for, because magnifying a small region is
+// the whole reason to crop one.
+func stillWidth(requested, source int, cropped bool) int {
+	if requested <= 0 {
+		return 0
+	}
+	if cropped {
+		return requested
+	}
+	if requested >= source {
 		return 0
 	}
 	return requested
 }
 
-func widthOr(requested, source int) int {
-	if w := scaleWidth(requested, source); w > 0 {
-		return w
+// orElse returns the resolved width, falling back to the source width when no
+// scaling was applied.
+func orElse(width, source int) int {
+	if width > 0 {
+		return width
 	}
 	return source
 }

@@ -2,6 +2,41 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D14 — The activity image names what it leaves out
+
+An agent found that `project` silently dropped four of seven events — every
+cut, the flash and the gradual fade — leaving an image that suggested nothing
+happened in the second half of the clip. The exclusions were disclosed, but
+only in a JSON field, and the image is the thing people look at first.
+
+The legend band now carries the omission line, in the picture, and the result
+carries the same sentence as `omitted_from_image`.
+
+## D13 — Regions can be cropped and magnified
+
+Both debugging trials left the tool for ImageMagick, because a 20x20 indicator
+or a 2px card edge is invisible in a 640px still. For a tool whose findings are
+routinely a few pixels across, that is a hole in the middle of the workflow.
+
+`--region` and `--pad` on `frames` and `sheet` crop before scaling, so `--width`
+magnifies. `--region` takes an event's `region_xyxy` verbatim, and `next_steps`
+now proposes a crop for the smallest event found.
+
+## D12 — A stall is a finding, not a quiet range
+
+The most diagnostically important fact in the defect scenario — a 3.2 second
+freeze — reached the caller as `quiet_ranges: [[10.83, 14]]` and the sentence
+"Nothing changes during 10.83s-14.00s". An agent debugging a "felt janky"
+report had to re-run at a lower threshold and diff frames with an external tool
+to establish what the tool already knew. Its verdict: the vocabulary "actively
+undersells it — quiet reads as fine, not the screen froze".
+
+A freeze is an absence of change, so no pixel describes it; it has to be
+derived. `stall` is now an event kind, reported when activity that was running
+continuously stopped and resumed in the same place, and the narrative says so
+in its own sentence. The definition is narrow on purpose: on a static screen a
+gap is just a gap, and a stall reported there would be worthless.
+
 ## D11 — The sparkline shows fast change only
 
 It previously took the larger of the fast and slow measures, which saturated on

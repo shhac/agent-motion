@@ -70,16 +70,22 @@ func (f *Fake) Decode(_ context.Context, req Request, fn func(Frame) error) erro
 }
 
 // Still records the request and renders the frame at that timestamp.
-func (f *Fake) Still(_ context.Context, _ string, at float64, width int) ([]byte, error) {
-	f.Stills = append(f.Stills, at)
+func (f *Fake) Still(_ context.Context, _ string, still Still) ([]byte, error) {
+	f.Stills = append(f.Stills, still.At)
 	if f.StillPNG != nil || f.Render == nil {
 		return f.StillPNG, nil
 	}
-	w, h := FitWidth(f.Info, width)
 	native := make([]byte, f.Info.Width*f.Info.Height*3)
-	f.Render(native, int(math.Floor(at*f.Info.FPS)))
+	f.Render(native, int(math.Floor(still.At*f.Info.FPS)))
+	src, srcW, srcH := crop(native, f.Info.Width, f.Info.Height, still.Crop)
+
+	w, h := srcW, srcH
+	if still.Width > 0 {
+		w = still.Width
+		h = max(2, even(int(math.Round(float64(srcH)*float64(w)/float64(srcW)))))
+	}
 	small := make([]byte, w*h*3)
-	scale(native, f.Info.Width, f.Info.Height, small, w, h)
+	scale(src, srcW, srcH, small, w, h)
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for p := 0; p < w*h; p++ {
@@ -91,6 +97,20 @@ func (f *Fake) Still(_ context.Context, _ string, at float64, width int) ([]byte
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// crop returns the requested rectangle of a frame, or the frame itself.
+func crop(src []byte, w, h int, r image.Rectangle) ([]byte, int, int) {
+	r = r.Intersect(image.Rect(0, 0, w, h))
+	if r.Empty() {
+		return src, w, h
+	}
+	out := make([]byte, r.Dx()*r.Dy()*3)
+	for y := 0; y < r.Dy(); y++ {
+		from := ((y+r.Min.Y)*w + r.Min.X) * 3
+		copy(out[y*r.Dx()*3:(y+1)*r.Dx()*3], src[from:from+r.Dx()*3])
+	}
+	return out, r.Dx(), r.Dy()
 }
 
 // scale is nearest neighbour, matching the fake's purpose of shape fidelity

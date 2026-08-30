@@ -60,7 +60,7 @@ Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
 | `timeline` | one pass | The described timeline. Start here. |
 | `sheet` | one pass + stills | One PNG of many labelled real frames. |
 | `project` | one full-res pass | The timeline plus an activity-map PNG. |
-| `frames` | one still each | Real source frames at chosen timestamps. |
+| `frames` | one still each | Real source frames at chosen timestamps, croppable. |
 
 Every result carries `next_steps` with commands you can run verbatim, and
 `limits` with what that run could not have seen.
@@ -69,7 +69,16 @@ Every result carries `next_steps` with commands you can run verbatim, and
 agent-motion sheet recording.mp4                       # see the whole thing
 agent-motion timeline recording.mp4 --start 17 --end 19 --threshold 4
 agent-motion frames recording.mp4 --at 17.62
+
+# something too small to see in a full frame — crop to it and magnify
+agent-motion frames recording.mp4 --at 6.2 \
+  --region 200,120,202,160 --pad 24 --width 480
 ```
+
+It also finds the thing that has no pixels: a `stall`, where something that had
+been animating continuously stopped and then resumed. On a "the page felt
+janky" report that is usually the answer, and it is invisible to anything that
+only looks for change.
 
 ## What it is good at, and what it is not
 
@@ -78,8 +87,13 @@ visual regression runs, rendering and game debugging. It finds where and when
 pixels changed, including changes far too slow to see between adjacent frames.
 
 It does not recognise objects, read text, or explain why anything changed.
-Regions are bounding boxes of change, not outlines. A handheld or panning
-camera makes everything change at once, and the results become much weaker.
+Regions are bounding boxes of change, not outlines.
+
+Where it is a poor fit — a panning camera, a scrolling page, a slow zoom, or
+ambient motion like wind, water or film grain — it says so. Every result
+carries a `suitability` verdict, and the narrative leads with the warning, so a
+list of confident-looking events from footage where everything moves cannot be
+mistaken for findings.
 
 ## The activity image
 

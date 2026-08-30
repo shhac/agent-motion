@@ -9,7 +9,7 @@
 | `events` | The described occurrences, in time order. |
 | `quiet_ranges` | Stretches with no detected change. Two ranges meeting at one timestamp are separated by an instantaneous event, not joined. |
 | `busiest_seconds` | Timestamp of the single largest frame-to-frame change. |
-| `activity_sparkline` | Shape of frame-to-frame activity, one character per bucket, `_` to `#`. `gradual` events do not appear in it. |
+| `activity_sparkline` | Shape of frame-to-frame activity, one character per bucket. Least to most active: `_ . : - = + * #`. `gradual` events do not appear in it. |
 | `activity_sparkline_full_scale` | The value a `#` represents. The ramp is square-root scaled, so it is orientation, not measurement. |
 | `motion_coverage` | Fraction of pixels that changed at least once. |
 | `timestamps_worth_inspecting` | Frames that would show the events found. |
@@ -42,13 +42,18 @@
   crossing the frame produces a box spanning its whole path.
 - **Nothing found is not nothing happened.** Check `limits`. Re-run with
   `--threshold 4`, and with `--native` if the detail is thin.
-- **A freeze produces no event.** Nothing changing is not something changing.
-  A hang, a stalled spinner or a dropped stream appears in `quiet_ranges`, and
-  is named in the narrative.
+- **A `stall` is an absence, not a thing.** It is reported when activity that
+  had been running continuously stopped and then resumed in the same place, so
+  it is meaningful on a recording with a spinner or a heartbeat and is
+  deliberately never reported on a static screen, where a gap is just a gap.
+  Its `region_xyxy` is the region that stopped, not a region that changed.
 - **An `unsuitable` verdict means the event list is not a finding list.** On
   footage where most of the frame moves, events are fragments of one moving
   scene and their boundaries are where activity happened to cross a floor.
-- **Colour in the `project` image is not source colour.** Read `encoding`.
+- **Colour in the `project` image is not source colour.** Read `encoding`, and
+  read `omitted_from_image` — cuts, gradual events and stalls are not in the
+  picture, and a glance at it alone can suggest nothing happened where plenty
+  did.
 - **Timestamps are decoder timestamps.** They are stable for one FFmpeg build
   and input, but seeking is keyframe-dependent, so treat them as accurate to
   roughly one frame rather than exact.

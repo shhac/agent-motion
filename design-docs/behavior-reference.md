@@ -128,9 +128,40 @@ Both facts are stated in the result rather than left to be discovered.
 The optional legend band is appended *below* the frame, so image `x,y` still
 maps to source `x,y`.
 
-## What a stall looks like
+## Stalls
 
-A hang or a freeze is an *absence* of change, so no event can describe it. It
-reaches the caller through `quiet_ranges` and through the narrative, which names
-the quiet stretches explicitly. On a recording that is mostly still this is
-noise; on one with a continuous heartbeat it is the finding.
+A hang or a freeze is an *absence* of change, so nothing in the pixel data
+describes it. Reported only as a quiet range it reads exactly like a screen
+meant to be still, which is the opposite of what it means.
+
+A stall is therefore derived from the events rather than from the pixels. Two
+events qualify as its ends when both run for at least 0.5s, their regions
+overlap, the gap between them is at least 0.8s, and nothing else happened in
+that region during the gap. Brief events are filtered out before the pairing,
+or a blip landing inside a long event's span would break the adjacency between
+that event and its own resumption.
+
+The definition is deliberately narrow. On a static screen a gap is just a gap,
+and calling that a freeze would make the finding worthless. It fires only when
+something that *was* running continuously stopped and then started again.
+
+The event carries the peak change seen during the gap, so a caller can tell
+"nothing above the threshold" from "not a single pixel moved". The narrative
+states it in its own sentence rather than leaving it in the quiet ranges.
+
+## Suitability
+
+Every analysis reports whether the recording is the kind the tool works on,
+because on footage where everything moves the event list is a list of fragments
+and nothing else in the output would say so.
+
+The measure is the share of the analysed interval covered by an event spanning
+more than 60% of the frame. A pan, a slow zoom, wind in foliage, water, fire, a
+crowd and film grain all produce one; a dashboard with an animating widget does
+not. Above 50% the verdict is `unsuitable`, above 20% `marginal`.
+
+Two earlier measures failed and are worth recording. Counting grid cells above
+their own noise floor scored panning footage as *more* suitable than a static
+screen, because an adaptive floor rises to meet constant motion. The median
+share of the frame changing per transition caught a pan but not foliage, where
+only half a percent of pixels clear the threshold in a typical frame.

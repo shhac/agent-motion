@@ -2,7 +2,10 @@
 // process lives here so analysis and rendering can be tested without FFmpeg.
 package video
 
-import "context"
+import (
+	"context"
+	"image"
+)
 
 // Info describes a source video as reported by the probe.
 type Info struct {
@@ -28,6 +31,14 @@ type Request struct {
 	FPS           float64
 }
 
+// Still selects one frame and how much of it to return. A zero Crop means the
+// whole frame; a zero Width means the source width of whatever is returned.
+type Still struct {
+	At    float64
+	Width int
+	Crop  image.Rectangle
+}
+
 // Frame is one decoded rgb24 image at an absolute source timestamp. Pix is
 // reused between callbacks, so a consumer that retains it must copy.
 type Frame struct {
@@ -40,5 +51,5 @@ type Frame struct {
 type Decoder interface {
 	Probe(ctx context.Context, path string) (Info, error)
 	Decode(ctx context.Context, req Request, fn func(Frame) error) error
-	Still(ctx context.Context, path string, at float64, width int) ([]byte, error)
+	Still(ctx context.Context, path string, still Still) ([]byte, error)
 }

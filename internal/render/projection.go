@@ -20,6 +20,10 @@ type ProjectionOptions struct {
 	Annotate bool
 	// Caption is an extra line drawn in the legend band.
 	Caption string
+	// Omitted names what this image does not show. It belongs in the picture
+	// rather than only in the metadata: a reader who glances at the image and
+	// sees nothing after a cut would otherwise conclude nothing happened.
+	Omitted string
 }
 
 // Projection renders per-pixel activity as one spatially aligned image.
@@ -59,7 +63,7 @@ func Projection(s motion.PixelStats, opt ProjectionOptions) *image.RGBA {
 	return img
 }
 
-const legendHeight = 58
+const legendHeight = 74
 
 func drawLegend(img *image.RGBA, s motion.PixelStats, opt ProjectionOptions) {
 	top := s.Height
@@ -79,13 +83,24 @@ func drawLegend(img *image.RGBA, s motion.PixelStats, opt ProjectionOptions) {
 	right := fmt.Sprintf("%.2fs", s.End)
 	Label(img, barRight-TextWidth(right), top+30, right, ink)
 	Label(img, barLeft, top+44, "green=when  red=how much  blue=how often", ink)
-	if opt.Caption != "" {
-		caption := opt.Caption
-		if w := TextWidth(caption); w > s.Width-16 {
-			caption = caption[:max(0, (s.Width-16)/7)]
-		}
-		Label(img, barLeft, top+56, caption, ink)
+	Label(img, barLeft, top+56, clip(opt.Caption, s.Width-16), ink)
+	if opt.Omitted != "" {
+		Label(img, barLeft, top+68, clip(opt.Omitted, s.Width-16), warn)
 	}
+}
+
+// clip shortens text to fit, cutting on runes so a multi-byte character is
+// never split, and marking that something was dropped.
+func clip(text string, width int) string {
+	if TextWidth(text) <= width {
+		return text
+	}
+	runes := []rune(text)
+	limit := max(0, width/7-1)
+	if limit >= len(runes) {
+		return text
+	}
+	return string(runes[:limit]) + "…"
 }
 
 // level converts a 0..1 fraction to an 8-bit channel value.

@@ -85,8 +85,8 @@ func projectCommand(g *globals) *cobra.Command {
 
 func framesCommand(g *globals) *cobra.Command {
 	var at []string
-	var dir string
-	var width int
+	var dir, region string
+	var width, pad int
 	cmd := &cobra.Command{
 		Use:   "frames <video>",
 		Short: "Write real source frames at chosen timestamps",
@@ -98,11 +98,15 @@ func framesCommand(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			crop, err := parseRegion(region, pad)
+			if err != nil {
+				return err
+			}
 			if dir == "" {
 				dir = derived(args[0], ".frames")
 			}
 			result, err := g.engine().Frames(cmd.Context(), engine.FramesOptions{
-				Path: args[0], At: times, Dir: dir, Width: width,
+				Path: args[0], At: times, Dir: dir, Width: width, Region: crop,
 			})
 			if err != nil {
 				return err
@@ -113,14 +117,17 @@ func framesCommand(g *globals) *cobra.Command {
 	cmd.Flags().StringSliceVar(&at, "at", nil, "Timestamps in seconds, e.g. --at 3.4,7.1")
 	cmd.Flags().StringVar(&dir, "dir", "", "Destination directory (default: <video>.frames)")
 	cmd.Flags().IntVar(&width, "width", 0, "Scale frames to this width (default: source width)")
+	cmd.Flags().StringVar(&region, "region", "", "Crop to x0,y0,x1,y1 in source pixels; paste an event's region_xyxy")
+	cmd.Flags().IntVar(&pad, "pad", 0, "Widen --region by this many pixels on every side")
 	return cmd
 }
 
 func sheetCommand(g *globals) *cobra.Command {
 	var flags analyseFlags
 	var at []string
-	var destination string
-	var count, columns, width int
+	var destination, region string
+	var count, columns, width, pad int
+	var quick bool
 	cmd := &cobra.Command{
 		Use:   "sheet <video>",
 		Short: "Write one labelled grid of frames covering the video",
@@ -136,12 +143,17 @@ func sheetCommand(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			crop, err := parseRegion(region, pad)
+			if err != nil {
+				return err
+			}
 			if destination == "" {
 				destination = derived(args[0], ".sheet.png")
 			}
 			result, err := g.engine().Sheet(cmd.Context(), engine.SheetOptions{
 				Path: args[0], At: times, Count: count, Columns: columns,
-				Width: width, Output: destination, Analyse: flags.options(args[0]),
+				Width: width, Output: destination, Region: crop, Quick: quick,
+				Analyse: flags.options(args[0]),
 			})
 			if err != nil {
 				return err
@@ -155,5 +167,8 @@ func sheetCommand(g *globals) *cobra.Command {
 	cmd.Flags().IntVar(&columns, "columns", 0, "Grid columns (default: chosen to stay roughly square)")
 	cmd.Flags().IntVar(&width, "width", 320, "Thumbnail width in pixels")
 	cmd.Flags().StringVarP(&destination, "output", "o", "", "Destination PNG (default: <video>.sheet.png)")
+	cmd.Flags().StringVar(&region, "region", "", "Crop every tile to x0,y0,x1,y1 in source pixels; paste an event's region_xyxy")
+	cmd.Flags().IntVar(&pad, "pad", 0, "Widen --region by this many pixels on every side")
+	cmd.Flags().BoolVar(&quick, "quick", false, "Skip the analysis pass; faster, but tiles lose their event labels")
 	return cmd
 }

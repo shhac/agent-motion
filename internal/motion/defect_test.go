@@ -98,3 +98,40 @@ func TestSlowDriftSurvivesAConstantlyAnimatingNeighbour(t *testing.T) {
 	}
 	t.Errorf("the status colour drift was not found; got %v", kinds(timeline.Events))
 }
+
+// A freeze is an absence of change, so no ordinary event can describe it. It
+// has to be promoted to a finding of its own, or it reads exactly like a screen
+// that was meant to be still.
+func TestStallIsReportedAsItsOwnFinding(t *testing.T) {
+	timeline, overview := defectTimeline(t)
+
+	var stall *motion.Event
+	for i := range timeline.Events {
+		if timeline.Events[i].Kind == motion.KindStall {
+			stall = &timeline.Events[i]
+		}
+	}
+	if stall == nil {
+		t.Fatalf("the 11-14s freeze was not reported as a stall; got %v", kinds(timeline.Events))
+	}
+	if stall.Start < 10.5 || stall.End > 14.5 {
+		t.Errorf("stall %v-%v does not match the 11-14s freeze", stall.Start, stall.End)
+	}
+	if stall.Region[0] < 500 {
+		t.Errorf("the stall should name the region that stopped, got %v", stall.Region)
+	}
+	if !strings.Contains(overview.Narrative, "stall") {
+		t.Errorf("the narrative must call out the stall, not leave it in the quiet ranges: %q", overview.Narrative)
+	}
+}
+
+// A gap between two unrelated moments on a mostly-still screen is not a freeze,
+// and calling it one would make the finding worthless.
+func TestQuietGapsOnAStillScreenAreNotStalls(t *testing.T) {
+	timeline, _ := referenceTimeline(t)
+	for _, e := range timeline.Events {
+		if e.Kind == motion.KindStall {
+			t.Errorf("the reference scenario has no continuously running activity to stop, but reported %+v", e)
+		}
+	}
+}

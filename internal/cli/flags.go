@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"image"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -90,6 +91,31 @@ func parseTimes(values []string) ([]float64, error) {
 		}
 	}
 	return out, nil
+}
+
+// parseRegion reads an x0,y0,x1,y1 rectangle, the same four numbers an event
+// reports in region_xyxy, so a region can be pasted straight from a result.
+func parseRegion(value string, pad int) (engine.Region, error) {
+	if strings.TrimSpace(value) == "" {
+		return engine.Region{Pad: pad}, nil
+	}
+	parts := strings.Split(value, ",")
+	if len(parts) != 4 {
+		return engine.Region{}, output.New("--region needs four numbers: x0,y0,x1,y1", output.FixableByAgent).
+			WithHint("paste an event's region_xyxy, e.g. --region 500,300,560,324")
+	}
+	var n [4]int
+	for i, part := range parts {
+		v, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil {
+			return engine.Region{}, output.New(fmt.Sprintf("could not read %q in --region as a whole number", part), output.FixableByAgent)
+		}
+		n[i] = v
+	}
+	if n[2] <= n[0] || n[3] <= n[1] {
+		return engine.Region{}, output.New("--region needs x1 greater than x0 and y1 greater than y0", output.FixableByAgent)
+	}
+	return engine.Region{Box: image.Rect(n[0], n[1], n[2], n[3]), Pad: pad}, nil
 }
 
 // derived builds a sibling path for generated output, e.g. clip.mp4 -> clip.sheet.png.

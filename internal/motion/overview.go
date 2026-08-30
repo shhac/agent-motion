@@ -53,6 +53,14 @@ func narrate(t Timeline, o Overview, start, end float64) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Found %s. ", countKinds(t.Events))
+	// A stall is the one finding that is an absence, so it has to be said
+	// rather than left for a reader to notice in the quiet ranges.
+	for _, e := range t.Events {
+		if e.Kind == KindStall {
+			fmt.Fprintf(&b, "Note the stall: activity in the %s stopped from %s to %s (%.2fs) and then resumed, which is what a freeze looks like. ",
+				e.Position, clock(e.Start), clock(e.End), e.End-e.Start)
+		}
+	}
 	fmt.Fprintf(&b, "The busiest moment is %s. ", clock(o.Busiest))
 	switch {
 	case len(o.Quiet) == 0:
@@ -78,6 +86,7 @@ var kindNouns = map[string][2]string{
 	KindMotion:  {"movement", "movements"},
 	KindGradual: {"gradual change", "gradual changes"},
 	KindBusy:    {"stretch of sustained activity", "stretches of sustained activity"},
+	KindStall:   {"stall where continuous activity stopped", "stalls where continuous activity stopped"},
 }
 
 func countKinds(events []Event) string {
@@ -119,6 +128,9 @@ func joinList(parts []string) string {
 func quietRanges(events []Event, start, end float64) [][2]float64 {
 	busy := make([][2]float64, 0, len(events))
 	for _, e := range events {
+		if e.Kind == KindStall {
+			continue // a stall is a quiet stretch; it should still read as one
+		}
 		busy = append(busy, [2]float64{e.Start, math.Max(e.End, e.Start)})
 	}
 	sort.Slice(busy, func(i, j int) bool { return busy[i][0] < busy[j][0] })

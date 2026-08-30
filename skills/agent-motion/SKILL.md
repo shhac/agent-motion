@@ -41,9 +41,10 @@ Read the fields in this order:
    that nothing happened.
 5. `next_steps` — commands you can run verbatim.
 
-`activity_sparkline` shows the shape of frame-to-frame activity at a glance.
-Its scale is relative to `activity_sparkline_full_scale`, so it is for
-orientation, not measurement, and `gradual` events do not appear in it.
+`activity_sparkline` shows the shape of frame-to-frame activity at a glance,
+one character per bucket, least to most active: `_ . : - = + * #`. Its scale is
+relative to `activity_sparkline_full_scale`, so it is for orientation, not
+measurement, and `gradual` events do not appear in it.
 
 ## Then see it
 
@@ -56,12 +57,27 @@ and the event it belongs to, choosing the moments from the analysis. Open it
 with the Read tool. This is usually the fastest way to learn what a recording
 is actually of.
 
-For specific moments, `--at` takes over and skips the analysis:
+For specific moments, pass `--at`:
 
 ```sh
 agent-motion sheet recording.mp4 --at 3.4,7.1,12.0
 agent-motion frames recording.mp4 --at 17.62      # full-size stills
 ```
+
+## Seeing something small
+
+A 20x20 indicator or a 2px layout shift is invisible in a full-frame still.
+Crop to the region and magnify — `--region` takes an event's `region_xyxy`
+verbatim, and cropping happens before scaling, so `--width` enlarges it:
+
+```sh
+agent-motion frames recording.mp4 --at 6.2 --region 200,120,202,160 \
+  --pad 24 --width 480
+```
+
+`--pad` widens the crop so a thin feature is not flush against the edge. It
+works on `sheet` too, which then crops every tile the same way — the fastest
+way to watch one small element change over time.
 
 ## Narrow in
 
@@ -88,9 +104,15 @@ subtle rendering instability, so lowering it is the standard second move.
 | `motion` | activity whose centre travels; `direction` and `travel_pixels` reported |
 | `gradual` | too slow to see between frames; found over the `--drift` window |
 | `busy` | sustained activity with no clearer shape |
+| `stall` | activity that was running continuously stopped, then resumed |
 
 Kinds describe the **shape** of a change, never its meaning. A `step` might be a
 button appearing, a tooltip closing, or a value updating — pull the frames.
+
+`stall` is the exception worth understanding: it is an *absence* of change, so
+no pixel shows it. It means something that had been animating continuously —
+a spinner, a caret, a polling indicator — stopped and then started again. On a
+"the page felt janky" report that is usually the answer.
 
 ## The activity image
 
@@ -102,10 +124,14 @@ Returns everything `timeline` returns and additionally writes a PNG where every
 pixel keeps its source `x,y`: red is how much it changed, green is when (black
 early, bright late), blue is how often. Black is no change above the threshold.
 
-It is an activity map, not a picture of the video. Whole-frame cuts are left out
-of it (they are listed in `transitions_excluded_from_image`) and `gradual`
-events never appear in it. Use `sheet` when you want to know what something
-looks like, and `project` when you want to know where on screen the action was.
+It is an activity map, not a picture of the video, and it is not the whole
+story. Whole-frame cuts are left out so they cannot flatten everything else,
+`gradual` events barely register in it, and a `stall` cannot be drawn at all.
+Everything it omits is named in `omitted_from_image` and printed into the
+legend band. Read that before concluding nothing happened somewhere.
+
+Use `sheet` when you want to know what something looks like, and `project` when
+you want to know where on screen the action was.
 
 ## Limits worth stating back
 
@@ -113,10 +139,13 @@ looks like, and `project` when you want to know where on screen the action was.
 - Regions are bounding boxes of change, not object outlines.
 - Analysis is downscaled to `--analysis-width` (320 by default) unless you pass
   `--native`; thin features can be missed.
-- A moving camera or a scrolling page makes almost everything an event. The
-  tool detects this itself and says so in `suitability`, but believe it.
-- A freeze or a hang is an *absence* of change, so no event describes it. It
-  shows up in `quiet_ranges` and in the narrative.
+- A moving camera, a scrolling page, a slow zoom, or ambient motion — wind in
+  foliage, water, fire, a crowd, film grain — makes everything an event. The
+  tool detects this itself and says so in `suitability`; believe it, and switch
+  to `sheet` and `frames`.
+- On a still screen, a gap is just a gap. A `stall` is only reported when
+  something that *was* running continuously stopped, so a quiet stretch on an
+  otherwise static recording is not one.
 
 ## Output and errors
 
