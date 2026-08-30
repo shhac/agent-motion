@@ -42,6 +42,11 @@ func (a *Analyzer) Overview(t Timeline, buckets int) Overview {
 
 func narrate(t Timeline, o Overview, start, end float64) string {
 	var b strings.Builder
+	// An unsuitable recording is the first thing a reader needs to know, before
+	// any finding that might be read as meaningful.
+	if t.Fit.Verdict != FitGood {
+		b.WriteString(t.Fit.Reason + " " + t.Fit.Advice + " ")
+	}
 	fmt.Fprintf(&b, "Analysed %s to %s. ", clock(start), clock(end))
 	if len(t.Events) == 0 {
 		b.WriteString("Nothing above the noise floor changed anywhere in this interval.")
@@ -183,7 +188,10 @@ func bucketActivity(s []Sample, start, end float64, buckets int) []float64 {
 		if i < 0 {
 			i = 0
 		}
-		out[i] = math.Max(out[i], math.Max(x.Changed, x.Drift))
+		// Frame-to-frame change only. Including drift saturates the line on any
+		// continuous texture — shimmering foliage, film grain — and a summary
+		// that is always full is not a summary.
+		out[i] = math.Max(out[i], x.Changed)
 	}
 	for i := range out {
 		out[i] = math.Round(out[i]*1000) / 1000

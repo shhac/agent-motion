@@ -2,6 +2,35 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D11 — The sparkline shows fast change only
+
+It previously took the larger of the fast and slow measures, which saturated on
+any continuous texture — shimmering foliage, film grain — and a one-line
+summary that is always full is not a summary. Gradual events are reported in
+the event list instead.
+
+## D10 — Results assess their own suitability
+
+Given ten seconds of animated film, the tool returned fourteen confident event
+summaries, two of them describing "repeated toggling across the whole frame".
+Nothing in the output said the findings were fragments of one continuously
+moving scene.
+
+Every analysis now reports a `suitability` verdict from the median share of the
+frame changing per transition, and the narrative leads with the warning when
+the verdict is not `suitable`. Any event covering more than 60% of the frame is
+relabelled and described as whole-frame motion rather than as a localised
+finding.
+
+The measure had to be absolute. The first attempt counted grid cells above
+their own noise floor, which scored panning footage as *more* suitable than a
+static screen: the adaptive floor normalises away exactly what the question is
+asking about.
+
+Calibration also corrected a wrong assumption. The animated clip used for this
+turned out to be a near-static shot, so its "suitable" verdict was right all
+along; a deliberately panned version was needed to calibrate the threshold.
+
 ## D9 — Segmentation is spatial as well as temporal
 
 Statistics are kept per cell of an 8x6 grid and segmentation runs per cell

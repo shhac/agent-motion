@@ -72,22 +72,23 @@ type AnalyseOptions struct {
 
 // Analysis is the result of one pass: what happened, when, and where.
 type Analysis struct {
-	Input      string         `json:"input"`
-	Source     video.Info     `json:"source"`
-	Params     Params         `json:"analysis"`
-	Narrative  string         `json:"narrative"`
-	Busiest    float64        `json:"busiest_seconds"`
-	Coverage   float64        `json:"motion_coverage"`
-	Events     []motion.Event `json:"events"`
-	Omitted    int            `json:"events_omitted,omitempty"`
-	Quiet      [][2]float64   `json:"quiet_ranges,omitempty"`
-	BucketSec  float64        `json:"bucket_seconds,omitempty"`
-	Sparkline  string         `json:"activity_sparkline,omitempty"`
-	PeakBucket float64        `json:"activity_sparkline_full_scale,omitempty"`
-	Activity   []float64      `json:"activity_by_bucket,omitempty"`
-	Inspect    []float64      `json:"timestamps_worth_inspecting,omitempty"`
-	NextSteps  []string       `json:"next_steps,omitempty"`
-	Limits     []string       `json:"limits"`
+	Input       string            `json:"input"`
+	Source      video.Info        `json:"source"`
+	Params      Params            `json:"analysis"`
+	Narrative   string            `json:"narrative"`
+	Suitability motion.Assessment `json:"suitability"`
+	Busiest     float64           `json:"busiest_seconds"`
+	Coverage    float64           `json:"motion_coverage"`
+	Events      []motion.Event    `json:"events"`
+	Omitted     int               `json:"events_omitted,omitempty"`
+	Quiet       [][2]float64      `json:"quiet_ranges,omitempty"`
+	BucketSec   float64           `json:"bucket_seconds,omitempty"`
+	Sparkline   string            `json:"activity_sparkline,omitempty"`
+	PeakBucket  float64           `json:"activity_sparkline_full_scale,omitempty"`
+	Activity    []float64         `json:"activity_by_bucket,omitempty"`
+	Inspect     []float64         `json:"timestamps_worth_inspecting,omitempty"`
+	NextSteps   []string          `json:"next_steps,omitempty"`
+	Limits      []string          `json:"limits"`
 
 	analyzer *motion.Analyzer
 }
@@ -141,20 +142,21 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 			Threshold: opt.Threshold, DriftSeconds: opt.DriftSeconds,
 			NoiseFloor: timeline.NoiseFloor,
 		},
-		Narrative:  overview.Narrative,
-		Busiest:    overview.Busiest,
-		Coverage:   round4(analyzer.Coverage()),
-		Events:     timeline.Events,
-		Omitted:    timeline.Truncated,
-		Quiet:      overview.Quiet,
-		BucketSec:  overview.BucketSeconds,
-		Sparkline:  overview.Sparkline,
-		PeakBucket: overview.PeakBucket,
-		Activity:   seriesOrNil(overview.Activity, opt.Series),
-		Inspect:    overview.Inspect,
-		NextSteps:  nextSteps(opt.Path, overview, timeline),
-		Limits:     limits(width, info.Width, opt.Threshold),
-		analyzer:   analyzer,
+		Narrative:   overview.Narrative,
+		Suitability: timeline.Fit,
+		Busiest:     overview.Busiest,
+		Coverage:    round4(analyzer.Coverage()),
+		Events:      timeline.Events,
+		Omitted:     timeline.Truncated,
+		Quiet:       overview.Quiet,
+		BucketSec:   overview.BucketSeconds,
+		Sparkline:   overview.Sparkline,
+		PeakBucket:  overview.PeakBucket,
+		Activity:    seriesOrNil(overview.Activity, opt.Series),
+		Inspect:     overview.Inspect,
+		NextSteps:   nextSteps(opt.Path, overview, timeline),
+		Limits:      limits(width, info.Width, opt.Threshold, timeline.Fit),
+		analyzer:    analyzer,
 	}, nil
 }
 
@@ -225,11 +227,15 @@ func narrowest(events []motion.Event) *motion.Event {
 	return best
 }
 
-func limits(analysisWidth, sourceWidth int, threshold float64) []string {
-	out := []string{
+func limits(analysisWidth, sourceWidth int, threshold float64, fit motion.Assessment) []string {
+	out := []string{}
+	if fit.Verdict != motion.FitGood {
+		out = append(out, fit.Reason+" "+fit.Advice)
+	}
+	out = append(out,
 		"Detects where and when pixels change. It does not identify objects, read text, or explain why something changed.",
 		fmt.Sprintf("Anything changing a pixel by less than %.0f/255 per step is invisible; lower --threshold to see subtler change.", threshold),
-	}
+	)
 	if analysisWidth < sourceWidth {
 		out = append(out, fmt.Sprintf("Analysed at %dpx wide, downscaled from %dpx; features thinner than about %d source pixels may be missed. Use --native for full resolution.",
 			analysisWidth, sourceWidth, int(math.Ceil(float64(sourceWidth)/float64(analysisWidth)))))

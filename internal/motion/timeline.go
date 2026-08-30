@@ -46,9 +46,63 @@ type Event struct {
 
 // Timeline is the described result of one analysis pass.
 type Timeline struct {
-	Events     []Event `json:"events"`
-	NoiseFloor float64 `json:"noise_floor_fraction"`
-	Truncated  int     `json:"events_omitted,omitempty"`
+	Events     []Event    `json:"events"`
+	NoiseFloor float64    `json:"noise_floor_fraction"`
+	Truncated  int        `json:"events_omitted,omitempty"`
+	Fit        Assessment `json:"suitability"`
+}
+
+// Suitability verdicts.
+const (
+	FitGood     = "suitable"
+	FitMarginal = "marginal"
+	FitPoor     = "unsuitable"
+)
+
+// Assessment says how much this recording resembles the fixed-viewport footage
+// the tool works on. Without it, continuously moving footage produces a long
+// list of confident-sounding events that mean nothing, and a caller has no way
+// to tell that from a real finding.
+type Assessment struct {
+	Verdict string `json:"verdict"`
+	// TypicalChanged is the median share of the frame changing per transition.
+	// It has to be an absolute measure: the per-cell noise floors adapt to the
+	// recording, so a relative one normalises away the very thing being asked.
+	TypicalChanged float64 `json:"typical_changed_fraction"`
+	Reason         string  `json:"reason"`
+	Advice         string  `json:"advice,omitempty"`
+}
+
+// assess measures how much of the frame is in motion at a typical moment.
+func (a *Analyzer) assess() Assessment {
+	if len(a.samples) == 0 {
+		return Assessment{Verdict: FitGood, Reason: "Nothing to measure."}
+	}
+	changed := make([]float64, len(a.samples))
+	for i, s := range a.samples {
+		changed[i] = s.Changed
+	}
+	typical := round4(median(changed))
+
+	switch {
+	case typical > 0.25:
+		return Assessment{
+			Verdict: FitPoor, TypicalChanged: typical,
+			Reason: fmt.Sprintf("In a typical frame %.0f%% of the picture changes. That is what a moving camera, a scrolling page, or full-motion video looks like, not a fixed viewport.", typical*100),
+			Advice: "Treat the events below as unreliable: where most of the frame moves at once, the boundaries between events are arbitrary and small findings are fragments of one moving scene. Use 'sheet' to look at the content instead, and 'frames' for specific moments.",
+		}
+	case typical > 0.06:
+		return Assessment{
+			Verdict: FitMarginal, TypicalChanged: typical,
+			Reason: fmt.Sprintf("In a typical frame %.0f%% of the picture changes, which is a lot for a fixed viewport.", typical*100),
+			Advice: "Some events may be fragments of one continuously moving thing rather than separate findings. Check a 'sheet' before relying on the event list.",
+		}
+	default:
+		return Assessment{
+			Verdict: FitGood, TypicalChanged: typical,
+			Reason: fmt.Sprintf("Most of the frame holds still; %.2f%% of it changes in a typical frame.", typical*100),
+		}
+	}
 }
 
 // TimelineOptions tunes segmentation. Zero values take documented defaults.
@@ -121,7 +175,7 @@ func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 	}
 	sort.Slice(events, func(i, j int) bool { return events[i].Start < events[j].Start })
 
-	t := Timeline{NoiseFloor: round4(median(floors)), Events: events}
+	t := Timeline{NoiseFloor: round4(median(floors)), Events: events, Fit: a.assess()}
 	if len(events) > opt.MaxEvents {
 		t.Events = trimToBudget(events, opt.MaxEvents)
 		t.Truncated = len(events) - len(t.Events)
@@ -339,6 +393,11 @@ func (a *Analyzer) describe(g group, floors []float64, opt TimelineOptions) (Eve
 		e.Kind = KindGradual
 		e.Start = math.Max(0, e.Start-opt.DriftSeconds)
 		e.round()
+		if e.RegionArea > 0.6 {
+			e.Summary = fmt.Sprintf("Most of the frame (%s) differs from itself %.1fs earlier, throughout %s to %s. That is what continuous motion looks like over the slow window, not a single gradual change.",
+				regionSize(e.Region), opt.DriftSeconds, clock(e.Start), clock(e.End))
+			return e, true
+		}
 		e.Summary = fmt.Sprintf(
 			"Gradual change from %s to %s in the %s (%s). Too slow to clear the threshold between adjacent frames; only visible over the %.1fs drift window.",
 			clock(e.Start), clock(e.End), e.Position, regionSize(e.Region), opt.DriftSeconds)
@@ -347,6 +406,15 @@ func (a *Analyzer) describe(g group, floors []float64, opt TimelineOptions) (Eve
 
 	e.Direction, e.TravelPixels = a.travel(firstCentre, lastCentre, footprint, active, opt)
 	e.Kind = classify(e, active, g.to-g.from+1, duration, opt)
+	if e.RegionArea > 0.6 && e.Kind != KindStep && e.Kind != KindBlip {
+		// A "flicker across the whole frame" is not a finding, it is a
+		// description of continuous motion. Say that instead.
+		e.Kind, e.ChangesPerSecond, e.Direction, e.TravelPixels = KindBusy, 0, "", 0
+		e.round()
+		e.Summary = fmt.Sprintf("Most of the frame (%s) is changing continuously from %s to %s. This is whole-frame motion rather than one localised event; its start and end are where activity crossed the noise floor, not real boundaries.",
+			regionSize(e.Region), clock(e.Start), clock(e.End))
+		return e, true
+	}
 	if e.Kind == KindFlicker && duration > 0 {
 		e.ChangesPerSecond = math.Round(float64(active)/duration*10) / 10
 	}

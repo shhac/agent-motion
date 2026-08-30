@@ -29,16 +29,21 @@ agent-motion timeline recording.mp4
 
 Read the fields in this order:
 
-1. `narrative` — one paragraph describing the whole interval.
+1. `narrative` — one paragraph describing the whole interval. If the recording
+   is a poor fit for this tool, the warning is the first thing in it.
 2. `events` — each with `kind`, `start_seconds`, `end_seconds`, `region_xyxy`,
    `position`, and a plain-English `summary`.
-3. `limits` — what this run could not have seen. Read it before concluding
+3. `suitability` — whether this recording is the kind the tool works on. A
+   verdict other than `suitable` means most of the frame moves at once, so the
+   event boundaries are arbitrary and small events are fragments of one moving
+   scene. Look at a `sheet` instead of trusting the list.
+4. `limits` — what this run could not have seen. Read it before concluding
    that nothing happened.
-4. `next_steps` — commands you can run verbatim.
+5. `next_steps` — commands you can run verbatim.
 
-`activity_sparkline` shows the shape of the interval at a glance; its scale is
-relative to `activity_sparkline_full_scale`, so it is for orientation, not
-measurement.
+`activity_sparkline` shows the shape of frame-to-frame activity at a glance.
+Its scale is relative to `activity_sparkline_full_scale`, so it is for
+orientation, not measurement, and `gradual` events do not appear in it.
 
 ## Then see it
 
@@ -108,7 +113,10 @@ looks like, and `project` when you want to know where on screen the action was.
 - Regions are bounding boxes of change, not object outlines.
 - Analysis is downscaled to `--analysis-width` (320 by default) unless you pass
   `--native`; thin features can be missed.
-- A moving camera or a scrolling page makes almost everything an event.
+- A moving camera or a scrolling page makes almost everything an event. The
+  tool detects this itself and says so in `suitability`, but believe it.
+- A freeze or a hang is an *absence* of change, so no event describes it. It
+  shows up in `quiet_ranges` and in the narrative.
 
 ## Output and errors
 

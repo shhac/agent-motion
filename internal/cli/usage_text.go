@@ -49,6 +49,12 @@ OUTPUT
   Read 'narrative' first, then 'events', then 'limits'. The 'limits' field says
   what this run could not have seen.
 
+SUITABILITY
+  Every analysis reports 'suitability'. When the verdict is not "suitable",
+  most of the frame is moving at once — a camera pan, a scroll, full-motion
+  video — and the event boundaries are arbitrary. The narrative leads with that
+  warning. Use 'sheet' on such footage instead of trusting the event list.
+
 PROJECT IMAGE
   Each pixel keeps its source x,y. Red is how much it changed, green is when
   (black early, bright late), blue is how often. Black is no change. Whole-frame

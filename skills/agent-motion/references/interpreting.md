@@ -4,11 +4,12 @@
 
 | Field | What it is |
 |---|---|
-| `narrative` | One paragraph covering the whole interval. Read it first. |
+| `narrative` | One paragraph covering the whole interval. Read it first. A suitability warning, when there is one, leads it. |
+| `suitability` | `verdict` of `suitable`, `marginal` or `unsuitable`, with a reason and advice. `typical_changed_fraction` is the median share of the frame changing per frame. |
 | `events` | The described occurrences, in time order. |
 | `quiet_ranges` | Stretches with no detected change. Two ranges meeting at one timestamp are separated by an instantaneous event, not joined. |
 | `busiest_seconds` | Timestamp of the single largest frame-to-frame change. |
-| `activity_sparkline` | Shape of the interval, one character per bucket, `_` to `#`. |
+| `activity_sparkline` | Shape of frame-to-frame activity, one character per bucket, `_` to `#`. `gradual` events do not appear in it. |
 | `activity_sparkline_full_scale` | The value a `#` represents. The ramp is square-root scaled, so it is orientation, not measurement. |
 | `motion_coverage` | Fraction of pixels that changed at least once. |
 | `timestamps_worth_inspecting` | Frames that would show the events found. |
@@ -41,6 +42,12 @@
   crossing the frame produces a box spanning its whole path.
 - **Nothing found is not nothing happened.** Check `limits`. Re-run with
   `--threshold 4`, and with `--native` if the detail is thin.
+- **A freeze produces no event.** Nothing changing is not something changing.
+  A hang, a stalled spinner or a dropped stream appears in `quiet_ranges`, and
+  is named in the narrative.
+- **An `unsuitable` verdict means the event list is not a finding list.** On
+  footage where most of the frame moves, events are fragments of one moving
+  scene and their boundaries are where activity happened to cross a floor.
 - **Colour in the `project` image is not source colour.** Read `encoding`.
 - **Timestamps are decoder timestamps.** They are stable for one FFmpeg build
   and input, but seeking is keyframe-dependent, so treat them as accurate to
