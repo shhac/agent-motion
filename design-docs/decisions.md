@@ -2,6 +2,28 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D21 — The family conventions that were actually missing
+
+A survey of nine sibling `agent-*` CLIs found four things this repo lacked
+beyond the licence and lint config: the `mcp` command that every mature sibling
+registers, `.claude/commands/release.md`, a repo-level guard on the skill's
+frontmatter, and `make tidy`. All four are now here.
+
+Two deliberate deviations remain, both recorded rather than drifted into:
+
+The family's idiom for a subprocess seam is a `runCmd func(...)` field on a
+struct. This repo uses a `video.Decoder` interface with an FFmpeg
+implementation and a `Fake` that replays a scenario. The interface earns its
+keep here because the fake is not a stub — it renders real frames, honours the
+interval, rate and crop of a request, and is what lets command-level tests
+exercise segmentation and image output with no decoder installed.
+
+The family is beginning to return file outputs as `output.FileRef` rather than
+as a bare path. Two of nine repos do so far. `project`, `sheet` and `frames`
+return plain paths, which three rounds of agent trials read without difficulty.
+Worth revisiting when the convention settles; not worth changing a contract
+that has been evaluated.
+
 ## D20 — Sampling a window is a flag, not arithmetic
 
 Both round-3 agents, independently, spent most of their manual iteration

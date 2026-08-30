@@ -1,3 +1,6 @@
+// Package engine composes decoding, analysis and rendering into the results the
+// CLI prints. It depends on the video.Decoder interface rather than on FFmpeg,
+// so every command is testable against a synthetic source.
 package engine
 
 import (

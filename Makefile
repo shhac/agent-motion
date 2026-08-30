@@ -28,6 +28,9 @@ fixture:
 vet:
 	GOCACHE=$(GOCACHE) go vet ./...
 
+tidy:
+	GOCACHE=$(GOCACHE) go mod tidy
+
 lint:
 	golangci-lint run ./...
 
@@ -41,4 +44,4 @@ clean:
 	rm -f $(BINARY)
 	rm -rf dist/
 
-.PHONY: build test test-short fixture fixtures vet lint fmt dev clean
+.PHONY: build test test-short fixture fixtures vet tidy lint fmt dev clean

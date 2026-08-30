@@ -12,6 +12,7 @@ agent-motion frames   <video> --at ... [--dir path] [--width N]
                               [--region x0,y0,x1,y1] [--pad N]
 agent-motion compare <video> --at t1,t2 [--region x0,y0,x1,y1] [--pad N]
                               [--threshold N] [-o path]
+agent-motion mcp   [--http addr]
 agent-motion usage
 ```
 
@@ -38,6 +39,11 @@ six evaluation agents named it as the single biggest gap.
 `project` returning the whole timeline is deliberate: an agent that wants the
 picture also wants the story, and the analysis pass that draws the picture has
 already produced it. Charging a second command for it would be a worse deal.
+
+`mcp` reflects the whole command tree into an MCP stdio server, so a client
+that speaks MCP rather than a shell gets the same surface. `inspect`, `timeline`
+and `usage` carry the read-only hint; the others write an image or a directory
+of frames, and none of them ever touches the source video.
 
 ## Output contract
 

@@ -40,6 +40,10 @@ they are not the product. See `design-docs/vision.md`.
 - Analysis is deterministic for the same decoder version, input, flags and
   pixel format.
 
+The skill is how an agent finds this tool at all, so `internal/skillmeta` guards
+its frontmatter and its links. A malformed skill fails silently — the tool is
+simply never used, with nothing to say why.
+
 ## Verification
 
 ```sh

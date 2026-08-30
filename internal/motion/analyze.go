@@ -1,3 +1,7 @@
+// Package motion turns a stream of decoded frames into per-transition
+// statistics, per-pixel accumulations, and a described timeline. Nothing here
+// runs a process or touches the filesystem, so every behaviour is defined by
+// the frames it is given and testable from synthetic ones.
 package motion
 
 import (

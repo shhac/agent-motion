@@ -1,6 +1,17 @@
+# Build output
 /agent-motion
 /dist/
+/release/
+
+# Local caches
 /.cache/
+.ai-cache/
+.tmp/
 coverage.out
-.DS_Store
+
+# Local, not checked in
+CLAUDE.local.md
+.claude/*.local.json
 .env*
+
+.DS_Store

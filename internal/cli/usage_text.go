@@ -14,6 +14,7 @@ COMMANDS
   project <video>    Timeline plus an activity-map PNG in source coordinates.
   frames <video>     Write real source frames at chosen timestamps.
   compare <video>    Say exactly how two moments differ, and draw it.
+  mcp                Serve the same commands over MCP (stdio, or --http addr).
   usage              This overview. '<command> --help' lists every flag.
 
 THE USUAL PATH

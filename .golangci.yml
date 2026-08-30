@@ -3,6 +3,9 @@ version: "2"
 linters:
   default: standard
   settings:
+    staticcheck:
+      checks:
+        - all
     errcheck:
       # Cobra's MarkFlagRequired returns an error that's safe to ignore at
       # command-registration time — it only fails if the flag doesn't exist,

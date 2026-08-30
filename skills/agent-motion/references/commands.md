@@ -111,6 +111,11 @@ clearly after; `compare` warns in `note` when they are too close to be sure.
 The drawn difference is at source resolution within the region, so use `--pad`
 to give a thin feature room.
 
+## `mcp`
+
+Serves the same commands over MCP: `agent-motion mcp` on stdio, or
+`--http <addr>`. A client that speaks MCP gets the same surface as the shell.
+
 ## `usage`
 
 The compact agent-facing contract, same as this reference in short form.

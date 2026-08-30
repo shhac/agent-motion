@@ -1,3 +1,6 @@
+// Package cli is the command tree and the output contract. It owns argument
+// parsing and formatting and nothing else; every decision about a video is made
+// below it, in engine.
 package cli
 
 import (
@@ -58,6 +61,7 @@ func newRoot(version string, dec video.Decoder) *cobra.Command {
 		compareCommand(g),
 		usageCommand(),
 	)
+	registerMCP(root)
 	return root
 }
 

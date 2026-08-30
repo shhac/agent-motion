@@ -63,6 +63,9 @@ Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
 | `frames` | one still each | Real source frames at chosen timestamps, croppable. |
 | `compare` | two stills | Exactly how two moments differ, with the difference drawn. |
 
+`agent-motion mcp` serves the same commands over MCP, so a client that speaks
+MCP rather than a shell gets an identical surface.
+
 Every result carries `next_steps` with commands you can run verbatim, and
 `limits` with what that run could not have seen.
 
