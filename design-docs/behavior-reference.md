@@ -57,8 +57,12 @@ cell than of the whole frame, so a per-cell noise floor sees things a global
 one cannot.
 
 Cell segments are then merged into events when their cells touch (including
-diagonally) and their stretches overlap. A moving object crossing several cells
-stays one event; two things happening at once in different places stay two.
+diagonally), their stretches overlap, **and** those stretches are within a
+factor of eight in length. A moving object crossing several cells stays one
+event; two things happening at once in different places stay two; and something
+brief beside something long-running is not absorbed by it. Without the last
+condition a progress bar advancing for twenty seconds swallows a caption that
+moves for two frames.
 
 ## Segmentation steps
 
@@ -97,6 +101,12 @@ nearest retained checkpoint either side of the segment inside its region.
 
 `changes_per_second` counts changes, so a full on-off cycle is two. Direction is
 the dominant axis of centroid travel, or both axes when neither dominates by 2:1.
+
+A motion event also reports the largest step taken *against* its own direction,
+when there is one larger than the typical per-frame footprint. Movement that
+reverses once is a fault class the tool can see and would otherwise have no
+words for — a progress bar regressing, a scroll resetting, a carousel snapping
+back — where the movement is expected and only the discontinuity is the bug.
 
 ## Persistence
 

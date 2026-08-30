@@ -120,7 +120,7 @@ subtle rendering instability, so lowering it is the standard second move.
 | `step` | brief localised change that is still there afterwards |
 | `blip` | brief localised change that reverted |
 | `flicker` | one area toggling repeatedly; `changes_per_second` is reported |
-| `motion` | activity whose centre travels; `direction` and `travel_pixels` reported |
+| `motion` | activity whose centre travels; `direction` and `travel_pixels` reported. If it reverses once, `jump_backwards_pixels` marks where — usually the bug, when the movement itself is expected |
 | `gradual` | too slow to see between frames; found over the `--drift` window |
 | `busy` | sustained activity with no clearer shape |
 | `stall` | activity that was running continuously stopped, then resumed |

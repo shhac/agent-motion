@@ -28,6 +28,7 @@
 | `position` | The third of the frame it sits in, e.g. `bottom right`. |
 | `persists` | Whether the region still looks different afterwards. Absent when it could not be compared. |
 | `direction`, `travel_pixels` | Set when the active centre moves. |
+| `jump_backwards_pixels`, `jump_backwards_seconds` | Set when the movement reverses once — a progress bar regressing, a scroll resetting, a carousel snapping back. The movement is usually expected; the jump is usually the bug. |
 | `changes_per_second` | Set for `flicker`. Counts changes, so a full on-off cycle is two. |
 | `peak_changed_fraction` | Largest share of the frame changing in one step. |
 | `peak_drift_fraction` | Largest change across the `--drift` window. For `gradual` events this is the only non-zero measure. |

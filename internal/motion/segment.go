@@ -35,6 +35,8 @@ func (o TimelineOptions) withDefaults() TimelineOptions {
 
 type span struct{ from, to int } // inclusive sample indices
 
+func (s span) length() int { return s.to - s.from + 1 }
+
 // cellSpan is one cell being active over one stretch of time.
 type cellSpan struct {
 	cell int
@@ -158,10 +160,25 @@ func groupSpans(spans []cellSpan, grid Grid, gap int) []group {
 	return out
 }
 
+// lengthRatio bounds how differently two stretches may last and still be called
+// the same event. Without it, anything brief that happens next to something
+// long-running is absorbed by it: a caption dropping six pixels for two frames
+// merges into a progress bar that has been advancing for twenty seconds, and
+// disappears. Cells belong to one event when they are active *together*, not
+// when one is active while the other happens to be running.
+const lengthRatio = 8
+
 // mergeable reports whether two cell stretches belong to the same event: same
-// timescale, touching cells, and overlapping in time.
+// timescale, touching cells, overlapping in time, and of comparable duration.
 func mergeable(a, b cellSpan, grid Grid, gap int) bool {
-	return a.scale == b.scale && grid.Adjacent(a.cell, b.cell) && overlaps(a.span, b.span, gap)
+	if a.scale != b.scale || !grid.Adjacent(a.cell, b.cell) || !overlaps(a.span, b.span, gap) {
+		return false
+	}
+	shorter, longer := a.length(), b.length()
+	if shorter > longer {
+		shorter, longer = longer, shorter
+	}
+	return longer <= lengthRatio*shorter
 }
 
 func overlaps(a, b span, gap int) bool {

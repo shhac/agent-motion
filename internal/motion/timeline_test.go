@@ -233,3 +233,56 @@ func TestSmallFramesGetACoarserGridRatherThanAnImpossibleOne(t *testing.T) {
 		}
 	}
 }
+
+// playerTimeline is the generalisation check: a scenario the detection rules
+// were not tuned against, whose faults all hide behind an element that moves
+// for the entire recording.
+func playerTimeline(t *testing.T) motion.Timeline {
+	t.Helper()
+	s := fixture.Player()
+	dec := s.Decoder()
+	a := motion.New(320, 180, motion.Options{
+		Threshold: 12, DriftFrames: 30, Checkpoints: 128, ExpectedFrames: s.Frames, IgnoreAbove: 0.5,
+	})
+	req := video.Request{Path: "player", Width: 320, Height: 180, FPS: s.FPS}
+	if err := dec.Decode(context.Background(), req, a.Add); err != nil {
+		t.Fatal(err)
+	}
+	return a.Timeline(motion.TimelineOptions{
+		FPS: s.FPS, SourceWidth: s.Width, SourceHeight: s.Height, DriftSeconds: 1, CutFraction: 0.5,
+	})
+}
+
+// TestFaultsSurviveAContinuouslyMovingElement is the regression guard for the
+// failure that forced duration-aware merging: a progress bar advancing for the
+// whole recording absorbed everything adjacent to it, and two of three faults
+// disappeared into one event covering the bottom half of the frame.
+func TestFaultsSurviveAContinuouslyMovingElement(t *testing.T) {
+	timeline := playerTimeline(t)
+
+	var bar *motion.Event
+	for i := range timeline.Events {
+		if timeline.Events[i].Kind == motion.KindMotion {
+			bar = &timeline.Events[i]
+		}
+	}
+	if bar == nil {
+		t.Fatal("the progress bar was not reported as movement")
+	}
+	// The bar is 8px tall. A region much taller than that has swallowed a
+	// neighbour.
+	if height := bar.Region[3] - bar.Region[1]; height > 24 {
+		t.Errorf("the progress bar's region is %d px tall, so it has absorbed something else: %v",
+			height, bar.Region)
+	}
+
+	if e := findNear(timeline.Events, 17, 0.3); e == nil || e.Kind != motion.KindStep {
+		t.Errorf("the caption dropping 6px at 17.00s was not found as a step; got %+v", e)
+	}
+	if e := findNear(timeline.Events, 13.07, 0.3); e == nil || e.Kind != motion.KindFlicker {
+		t.Errorf("the thumbnail flicker at 13.00s was not found; got %+v", e)
+	}
+	if e := findNear(timeline.Events, 8, 0.3); e == nil {
+		t.Errorf("the progress bar jumping backwards at 8.00s was not found; got %v", kinds(timeline.Events))
+	}
+}

@@ -46,6 +46,23 @@ jitter and the drift were invisible. After, the heartbeat is confined to its
 own 20x20 region, the jitter is reported as the card's two moving edges, the
 drift is found within a few pixels, and the stall is named in the narrative.
 
+## The player scenario
+
+`make fixture SCENARIO=player` renders the generalisation test: a video-player
+UI whose progress bar advances for the entire 22 seconds, with three faults
+hiding behind it.
+
+| Event | Time | Region | What it tests |
+|---|---|---|---|
+| `progress-regression` | 8.0s | 156,316–240,324 | a discontinuity inside expected movement |
+| `thumbnail-flicker` | 13.0–13.4s | 500,40–580,100 | a short burst beside continuous motion |
+| `caption-shift` | 17.0s | 60,240–400,276 | a 6px permanent shift beside continuous motion |
+
+It exists because two scenarios can be tuned against; a third that the rules
+have never seen tests whether they generalise. It immediately found that they
+did not: the progress bar absorbed the caption and the regression, reporting
+one event covering the bottom half of the frame. See D18.
+
 ## Baseline
 
 The first implementation, run over the whole reference video, reported five

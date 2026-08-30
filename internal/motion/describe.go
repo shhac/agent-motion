@@ -29,6 +29,10 @@ type groupStats struct {
 	peakTime    float64
 	peakDrift   float64
 	footprint   float64
+	// path is where the activity was, one point per active transition, so a
+	// discontinuity inside otherwise smooth movement can be found afterwards.
+	path  []image.Point
+	times []float64
 }
 
 // aggregate reduces one group's stretch of samples to its statistics.
@@ -55,6 +59,8 @@ func (a *Analyzer) aggregate(g group, floors []float64) groupStats {
 		stats.active++
 		stats.union = stats.union.Union(box)
 		stats.footprint += math.Hypot(float64(box.Dx()), float64(box.Dy()))
+		stats.path = append(stats.path, centre)
+		stats.times = append(stats.times, a.samples[i].Time)
 		if !seenFirst {
 			stats.first, seenFirst = centre, true
 		}
@@ -97,6 +103,9 @@ func (a *Analyzer) gradualEvent(e Event, opt TimelineOptions) Event {
 
 func (a *Analyzer) fastEvent(e Event, stats groupStats, opt TimelineOptions) Event {
 	e.Direction, e.TravelPixels = a.travel(stats, opt)
+	if e.TravelPixels > 0 {
+		e.JumpPixels, e.JumpSeconds = a.jump(stats, opt)
+	}
 	e.Kind = classify(e, stats)
 	if wholeFrame(e) {
 		// A "flicker across the whole frame" is not a finding, it is a
@@ -172,8 +181,13 @@ func summarise(e Event, opt TimelineOptions) string {
 		return fmt.Sprintf("Repeated toggling from %s to %s in the %s (%s), about %.1f changes per second over %.2fs.",
 			clock(e.Start), clock(e.End), e.Position, size, e.ChangesPerSecond, duration)
 	case KindMotion:
-		return fmt.Sprintf("Movement from %s to %s in the %s (%s); the active area travels %s across about %d px. The region is the whole path swept, not the size of the thing moving.",
+		text := fmt.Sprintf("Movement from %s to %s in the %s (%s); the active area travels %s across about %d px. The region is the whole path swept, not the size of the thing moving.",
 			clock(e.Start), clock(e.End), e.Position, size, e.Direction, e.TravelPixels)
+		if e.JumpPixels > 0 {
+			text += fmt.Sprintf(" It does not move smoothly: at %s it jumps about %d px backwards before carrying on.",
+				clock(e.JumpSeconds), e.JumpPixels)
+		}
+		return text
 	default:
 		if e.RegionArea > frameWideArea {
 			return fmt.Sprintf("Most of the frame (%s) is changing continuously from %s to %s. This is whole-frame motion rather than one localised event; its start and end are where activity crossed the noise floor, not real boundaries.",
@@ -243,6 +257,39 @@ func (a *Analyzer) travel(stats groupStats, opt TimelineOptions) (string, int) {
 		return "", 0
 	}
 	return compass(dx, dy), int(math.Round(distance))
+}
+
+// jump finds the largest step against the overall direction of travel. Smooth
+// movement has none; a progress bar snapping backwards, a scroll position
+// resetting, or a carousel jumping to the start all produce one, and that
+// discontinuity is usually the bug rather than the movement around it.
+func (a *Analyzer) jump(stats groupStats, opt TimelineOptions) (int, float64) {
+	if len(stats.path) < 3 {
+		return 0, 0
+	}
+	sx, sy := a.scale(opt)
+	netX := float64(stats.last.X-stats.first.X) * sx
+	netY := float64(stats.last.Y-stats.first.Y) * sy
+	length := math.Hypot(netX, netY)
+	if length == 0 {
+		return 0, 0
+	}
+	unitX, unitY := netX/length, netY/length
+
+	worst, at := 0.0, 0.0
+	for i := 1; i < len(stats.path); i++ {
+		stepX := float64(stats.path[i].X-stats.path[i-1].X) * sx
+		stepY := float64(stats.path[i].Y-stats.path[i-1].Y) * sy
+		if along := stepX*unitX + stepY*unitY; along < worst {
+			worst, at = along, stats.times[i]
+		}
+	}
+	// A backwards step has to beat the typical per-frame footprint to be a jump
+	// rather than the jitter of a bounding box around a moving thing.
+	if -worst < (stats.footprint/float64(stats.active))*math.Max(sx, sy) {
+		return 0, 0
+	}
+	return int(math.Round(-worst)), round2(at)
 }
 
 func compass(dx, dy float64) string {

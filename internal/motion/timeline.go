@@ -36,6 +36,11 @@ type Event struct {
 	// Direction and TravelPixels are set when the active centre moves.
 	Direction    string `json:"direction,omitempty"`
 	TravelPixels int    `json:"travel_pixels,omitempty"`
+	// JumpPixels and JumpSeconds mark a step against the direction of travel:
+	// movement that went backwards once, which is usually the fault rather than
+	// the movement around it.
+	JumpPixels  int     `json:"jump_backwards_pixels,omitempty"`
+	JumpSeconds float64 `json:"jump_backwards_seconds,omitempty"`
 	// Persists reports whether the region still looks different afterwards.
 	// It is nil when there was no checkpoint to compare against.
 	Persists *bool  `json:"persists,omitempty"`

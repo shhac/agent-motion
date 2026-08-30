@@ -2,6 +2,36 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D19 — A backwards step inside movement is named
+
+Movement that reverses once is a class of fault the tool could see and had no
+words for: a progress bar regressing, a scroll position resetting, a carousel
+snapping back. The movement itself is expected, so reporting only "something
+moved left to right" describes everything except the bug.
+
+Motion events now carry the largest step taken against their own direction of
+travel, and the summary says so. The threshold is the typical per-frame
+footprint, so the jitter of a bounding box around a moving thing does not
+qualify. Verified to fire on a deliberate snap-back and to stay silent on the
+reference scenario's smooth traverse.
+
+## D18 — Cells merge on comparable duration, not just adjacency
+
+A third scenario, built to test generalisation rather than to tune against,
+broke the segmentation immediately. A progress bar advancing for the whole
+recording absorbed everything adjacent to it: a caption dropping six pixels and
+a backwards jump in the bar both vanished into one event covering the bottom
+half of the frame.
+
+Adjacency alone was the wrong rule. Two cells belong to the same event when
+they are active *together*, not when one is active while the other happens to
+be running, so a merge now also requires the two stretches to be within a
+factor of eight in length. All three faults are found, and neither of the two
+earlier scenarios changed.
+
+This is the same failure as D9 one level up: that one was about two things in
+different places, this one about two things on different timescales.
+
 ## D17 — Rotation is applied, not just reported
 
 A quarter-turn source would have produced entirely wrong coordinates without
