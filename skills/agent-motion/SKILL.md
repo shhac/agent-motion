@@ -79,6 +79,25 @@ agent-motion frames recording.mp4 --at 6.2 --region 200,120,202,160 \
 works on `sheet` too, which then crops every tile the same way — the fastest
 way to watch one small element change over time.
 
+## Ask whether something is the same as it was
+
+```sh
+agent-motion compare recording.mp4 --at 14.9,18.5
+agent-motion compare recording.mp4 --at 6.13,6.23 \
+  --region 200,120,202,160 --pad 24 -o jitter.png
+```
+
+Every other command compares neighbouring frames. `compare` takes two arbitrary
+timestamps and gives an exact pixel count, which answers questions nothing else
+can: did the screen come back to the same state after that cut, did the region
+really revert, is anything at all different between these two moments. It
+distinguishes *identical* from *nothing above the threshold* — the second is
+what codec noise looks like.
+
+With `-o` it draws the difference: the later frame dimmed, with everything that
+differs lit up. For a change of a pixel or two, this is the only way to see it —
+two nearly identical stills cannot be compared by eye.
+
 ## Narrow in
 
 Events give you a range; run again inside it with a lower threshold to see what

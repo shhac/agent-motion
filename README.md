@@ -61,6 +61,7 @@ Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
 | `sheet` | one pass + stills | One PNG of many labelled real frames. |
 | `project` | one full-res pass | The timeline plus an activity-map PNG. |
 | `frames` | one still each | Real source frames at chosen timestamps, croppable. |
+| `compare` | two stills | Exactly how two moments differ, with the difference drawn. |
 
 Every result carries `next_steps` with commands you can run verbatim, and
 `limits` with what that run could not have seen.
@@ -73,6 +74,11 @@ agent-motion frames recording.mp4 --at 17.62
 # something too small to see in a full frame — crop to it and magnify
 agent-motion frames recording.mp4 --at 6.2 \
   --region 200,120,202,160 --pad 24 --width 480
+```
+
+```sh
+# is it the same as it was before that cut?
+agent-motion compare recording.mp4 --at 14.9,18.5
 ```
 
 It also finds the thing that has no pixels: a `stall`, where something that had

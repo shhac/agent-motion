@@ -215,3 +215,21 @@ func overlapsWell(got, want [4]int) bool {
 	reported := float64((got[2] - got[0]) * (got[3] - got[1]))
 	return intersection/truth > 0.6 && reported < truth*3
 }
+
+// A grid whose cells are smaller than the minimum floor can never report an
+// event, so a small analysis width silently returned nothing at all.
+func TestSmallFramesGetACoarserGridRatherThanAnImpossibleOne(t *testing.T) {
+	for _, width := range []int{8, 16, 24, 40} {
+		height := max(2, width*9/16)
+		a, s := analyseReference(t, width, height, motion.Options{
+			Threshold: 12, Checkpoints: 32, ExpectedFrames: s2frames(), IgnoreAbove: 0.5,
+		})
+		timeline := a.Timeline(motion.TimelineOptions{
+			FPS: s.FPS, SourceWidth: s.Width, SourceHeight: s.Height, CutFraction: 0.5,
+		})
+		if len(timeline.Events) == 0 {
+			t.Errorf("at %dx%d the analysis reported nothing at all, which cannot be right for this scenario",
+				width, height)
+		}
+	}
+}

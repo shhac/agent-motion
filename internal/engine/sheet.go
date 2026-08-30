@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/shhac/agent-motion/internal/motion"
@@ -190,13 +191,17 @@ func near(times []float64, at, tolerance float64) bool {
 	return false
 }
 
+// eventAt names every event covering a timestamp. A moment can be both the end
+// of a flicker and the start of the stall that interrupted it, and labelling
+// only the first makes the two look like one.
 func eventAt(events []motion.Event, at float64) string {
+	var kinds []string
 	for _, e := range events {
-		if at >= e.Start-0.05 && at <= e.End+0.05 {
-			return e.Kind
+		if at >= e.Start-0.05 && at <= e.End+0.05 && !slices.Contains(kinds, e.Kind) {
+			kinds = append(kinds, e.Kind)
 		}
 	}
-	return ""
+	return strings.Join(kinds, "/")
 }
 
 func columnsOf(sheetWidth int, tiles []render.Tile) int {

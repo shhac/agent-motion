@@ -78,9 +78,30 @@ Writes real source frames.
 | `--region` | none | Crop to `x0,y0,x1,y1` in source pixels. Takes an event's `region_xyxy` verbatim. |
 | `--pad` | 0 | Widen `--region` by this many pixels on every side. |
 
+`frames` writes one file per timestamp, so it takes `--dir` rather than
+`--output`. For several moments side by side in a single image, use
+`sheet --at ... --region ...` instead — it does the compositing for you.
+
 Cropping happens before scaling, so `--region 200,120,202,160 --pad 24 --width
 480` returns that region enlarged rather than a shrunken whole frame. This is
 how you look at something too small to see in a full-frame still.
+
+## `compare <video>`
+
+Measures two arbitrary timestamps against each other.
+
+| Flag | Default | Meaning |
+|---|---:|---|
+| `--at` | required | Exactly two timestamps, e.g. `--at 14.9,18.5`. |
+| `--threshold` | 12 | Ignore per-pixel differences at or below this 0..255 value. |
+| `--region` | none | Compare only `x0,y0,x1,y1` in source pixels. |
+| `--pad` | 0 | Widen `--region` by this many pixels on every side. |
+| `--output`, `-o` | none | Draw the difference to this PNG. |
+
+`identical` means not one pixel differs. `changed_pixels` of zero with
+`identical: false` means the difference is below the threshold — codec noise.
+The drawn difference is at source resolution within the region, so use `--pad`
+to give a thin feature room.
 
 ## `usage`
 

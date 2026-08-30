@@ -44,17 +44,34 @@ type Params struct {
 	NoiseFloor     float64 `json:"noise_floor_fraction"`
 }
 
+// Defaults returns the documented defaults. Build options from here rather than
+// from a zero value: zero is a legal, meaningful setting for the threshold, the
+// drift window and the bucket count, so it is taken literally.
+func Defaults(path string) AnalyseOptions {
+	return AnalyseOptions{
+		Path:         path,
+		Threshold:    DefaultThreshold,
+		Width:        DefaultAnalysisWidth,
+		DriftSeconds: DefaultDriftSeconds,
+		MaxEvents:    DefaultMaxEvents,
+		Buckets:      DefaultBuckets,
+	}
+}
+
 // AnalyseOptions selects an interval and the sensitivity of the pass.
+//
+// Zero values are taken literally: a threshold of zero records every pixel that
+// is not byte-identical, a drift of zero turns the slow timescale off, and zero
+// buckets omit the activity sparkline. Use Defaults for the documented settings
+// and change what you need. A negative value means "use the default".
 type AnalyseOptions struct {
 	Path       string
 	Start, End float64
 	Threshold  float64
 	Width      int
 	SampleFPS  float64
-	// DriftSeconds is the slow-comparison window; zero takes the default.
-	// NoDrift turns the slow timescale off, which zero alone cannot express.
+	// DriftSeconds is the slow-comparison window. Zero turns it off.
 	DriftSeconds float64
-	NoDrift      bool
 	MaxEvents    int
 	Buckets      int
 	// Native analyses at the source resolution. It is what the image needs and
@@ -130,22 +147,23 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 	}
 	spanStart, spanEnd := analyzer.Span()
 
+	params := Params{
+		Start: round(spanStart), End: round(spanEnd), FramesAnalysed: analyzer.Frames(),
+		SampleFPS: opt.SampleFPS, Width: width, Height: height,
+		Threshold: opt.Threshold, DriftSeconds: opt.DriftSeconds,
+		NoiseFloor: timeline.NoiseFloor,
+	}
 	return &Analysis{
-		Input:  opt.Path,
-		Source: info,
-		Params: Params{
-			Start: round(spanStart), End: round(spanEnd), FramesAnalysed: analyzer.Frames(),
-			SampleFPS: opt.SampleFPS, Width: width, Height: height,
-			Threshold: opt.Threshold, DriftSeconds: opt.DriftSeconds,
-			NoiseFloor: timeline.NoiseFloor,
-		},
+		Input:       opt.Path,
+		Source:      info,
+		Params:      params,
 		Overview:    overview,
 		Suitability: timeline.Fit,
 		Coverage:    round4(analyzer.Coverage()),
 		Events:      timeline.Events,
 		Omitted:     timeline.Truncated,
 		NextSteps:   nextSteps(opt, overview, timeline),
-		Limits:      limits(width, info.Width, opt.Threshold, timeline.Fit),
+		Limits:      limits(params, info.Width, info.FPS, timeline.Fit),
 		image: imageInputs{
 			stats:       analyzer.Pixels(),
 			transitions: analyzer.Accumulated(),
@@ -155,22 +173,19 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 }
 
 func (o AnalyseOptions) withDefaults(info video.Info) AnalyseOptions {
-	if o.Threshold <= 0 {
+	if o.Threshold < 0 {
 		o.Threshold = DefaultThreshold
 	}
 	if o.SampleFPS <= 0 {
 		o.SampleFPS = info.FPS
 	}
-	switch {
-	case o.NoDrift:
-		o.DriftSeconds = 0
-	case o.DriftSeconds <= 0:
+	if o.DriftSeconds < 0 {
 		o.DriftSeconds = DefaultDriftSeconds
 	}
 	if o.MaxEvents <= 0 {
 		o.MaxEvents = DefaultMaxEvents
 	}
-	if o.Buckets <= 0 {
+	if o.Buckets < 0 {
 		o.Buckets = DefaultBuckets
 	}
 	if o.Native {

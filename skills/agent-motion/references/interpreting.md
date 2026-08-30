@@ -33,6 +33,17 @@
 | `peak_drift_fraction` | Largest change across the `--drift` window. For `gradual` events this is the only non-zero measure. |
 | `summary` | The same thing in a sentence. |
 
+## Comparing two moments
+
+`compare` returns `identical`, `changed_pixels`, `changed_fraction`,
+`max_pixel_delta`, `mean_pixel_delta` and `differs_within_xyxy`.
+
+| Result | Means |
+|---|---|
+| `identical: true` | Not one pixel differs. The frames are byte-for-byte the same picture. |
+| `identical: false`, `changed_pixels: 0` | Nothing clears the threshold. On a lossy codec this is what "unchanged" actually looks like; `max_pixel_delta` tells you how far off it is. |
+| `changed_pixels > 0` | Real difference. `differs_within_xyxy` bounds it in source coordinates. |
+
 ## What a result does not mean
 
 - **An event is not a thing.** It is a region of pixels that changed together.

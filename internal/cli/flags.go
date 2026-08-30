@@ -62,10 +62,10 @@ func (f *analyseFlags) validate() error {
 }
 
 func (f *analyseFlags) options(path string) engine.AnalyseOptions {
+	// Every flag carries its own default, so these values are always explicit.
 	return engine.AnalyseOptions{
 		Path: path, Start: f.start, End: f.end, Threshold: f.threshold,
-		Width: f.width, SampleFPS: f.sampleFPS,
-		DriftSeconds: f.drift, NoDrift: f.drift == 0,
+		Width: f.width, SampleFPS: f.sampleFPS, DriftSeconds: f.drift,
 		MaxEvents: f.maxEvents, Buckets: f.buckets, Native: f.native, Series: f.series,
 	}
 }

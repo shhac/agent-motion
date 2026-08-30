@@ -149,6 +149,34 @@ The event carries the peak change seen during the gap, so a caller can tell
 "nothing above the threshold" from "not a single pixel moved". The narrative
 states it in its own sentence rather than leaving it in the quiet ranges.
 
+## Comparing two moments
+
+`compare` decodes exactly two frames and measures them against each other with
+the same mean-absolute-RGB metric, at source resolution within the requested
+region. It reports the changed count, the largest single-pixel difference and a
+bounding box, and separates *identical* from *nothing above the threshold* —
+on a lossy codec the second is what an unchanged screen actually looks like.
+
+The drawn difference is the later frame at 30% brightness with differing pixels
+lit in proportion to the square root of their delta, so a one-shade change is
+still visible beside a region that changed completely.
+
+## Rotation
+
+FFprobe reports coded dimensions; FFmpeg autorotates on output. For a source
+with a quarter-turn rotation the frames that arrive are therefore the other way
+up from the numbers in the probe, and because the scale filter forces the
+requested size, nothing would have failed — every region and the whole
+projection image would simply have been wrong. Width and height are swapped at
+probe time when the rotation is not a multiple of 180.
+
+## Grid sizing
+
+Cells must be large enough that an event can exist in them. The per-cell floor
+never drops below two pixels, so a cell of two pixels or fewer can never be
+reported as active, and a small analysis width silently returned nothing at
+all. The grid is coarsened until every cell holds at least twelve pixels.
+
 ## Suitability
 
 Every analysis reports whether the recording is the kind the tool works on,

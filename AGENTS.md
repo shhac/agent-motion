@@ -11,7 +11,11 @@ they are not the product. See `design-docs/vision.md`.
 ## Project rules
 
 - The binary is `agent-motion`. `timeline` is the primary command; `project` is
-  `timeline` plus the activity-map image.
+  `timeline` plus the activity-map image. `compare` stands outside the ladder:
+  it answers a question about two specific moments.
+- Options take zero literally. A threshold of zero, a drift of zero and zero
+  buckets are all meaningful settings, so `withDefaults` fills in only negative
+  values and `engine.Defaults` is how a caller gets the documented ones.
 - Single resources default to pretty JSON. Any future list command defaults to
   NDJSON. `--format json|yaml|jsonl` overrides either default.
 - Every failure is one JSON object on stderr with `fixable_by`

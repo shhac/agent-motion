@@ -101,3 +101,74 @@ agent observed edge pixels that occasionally do.
 The footage score is the one that mattered most: the tool was not wrong about
 the pixels, it was wrong about how much its findings were worth, and it said
 nothing about the difference.
+
+## Round 2
+
+The same three tasks, run against the tool after round 1's changes, by fresh
+agents with no knowledge of the first round.
+
+### What the changes did
+
+**The freeze is now free.** Where round 1 had to re-run at a lower threshold and
+diff frames with ImageMagick to establish the stall, round 2 reported: "the tool
+found it, named it correctly, and even editorialized helpfully… I only had to
+confirm visually; no inference needed."
+
+**The suitability warning lands.** The footage trial: "not buried — it's the
+literal first thing you read if you follow the docs' own instruction to read
+`narrative` first, and it's also its own top-level structured field, not
+something you have to infer. I would have noticed this even skimming." It still
+rated the tool 4/10 *for that video*, which is correct and now honest: "it
+scores those 4 points honestly… it fails loudly and early instead of quietly
+returning garbage."
+
+It also spot-checked the events it had been warned about and confirmed the
+warning was right — a `motion` event with a direction and a travel distance
+turned out to be leaf shimmer. Without the warning it says it "could easily have
+reported 'a bird flies left to right at 8.3s'".
+
+**Region cropping is used and works.** Both trials reached for `--region --pad
+--width` unprompted. One called the design "one real design win after another
+(crop-before-scale, `region_xyxy` round-tripping directly from events into the
+next command, `quiet_ranges` bounding my search space immediately)".
+
+### What round 2 asked for
+
+**Comparing two moments — asked for by three of the six agents across both
+rounds, independently.** The describe trial wanted to know whether the scene
+after a cut was the same one as before it; the debug trial wanted to confirm
+what moved in a two-pixel jitter it could not see by eye. Both named it as the
+single biggest gap, in the same words: a `compare`/`diff` between two arbitrary
+timestamps. That is now a command. See D15.
+
+**Smaller.** The `frames` docs did not mention that it takes `--dir` rather than
+`-o`, or cross-reference `sheet --region` for several moments side by side. A
+tile falling inside two events was labelled with only the first, so the end of a
+flicker and the start of the stall that interrupted it looked like one thing. A
+missing file surfaced FFprobe's stderr as the error text — "the one place the
+tool's usually-crisp voice slipped into a subprocess's voice".
+
+**Declined for now.** Both trials wanted the activity image to include stalls
+and gradual events. It cannot: a stall has no pixels, and a gradual change never
+clears the frame-to-frame threshold that the image is drawn from. Naming the
+omission in the legend is the honest answer, and `compare` now covers the case
+that drove the request. The footage trial also wanted the tool to separate a
+camera pan from ambient motion, which needs optical flow — out of scope, and
+recorded in the vision doc as such.
+
+### Scores
+
+| Trial | Round 1 | Round 2 |
+|---|---:|---:|
+| describe | 8/10 | 8/10 |
+| debug | 7/10 | 7/10 |
+| footage | 4/10 | 4/10 |
+
+The numbers held while the reasons changed completely, which is the useful
+result. Round 1's deductions were about the tool failing to say what it knew;
+round 2's are about capabilities it does not have — comparing two moments, since
+built, and reconstructing motion, which is out of scope by design. The footage
+score stayed at 4 because that video is genuinely the wrong input; what changed
+is that the agent now says the tool "fails loudly and early instead of quietly
+returning garbage", and would recommend running it first on unfamiliar footage
+purely for the suitability gate.

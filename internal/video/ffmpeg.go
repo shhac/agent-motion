@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -66,6 +67,9 @@ func (f *FFmpeg) Probe(ctx context.Context, path string) (Info, error) {
 	if err := f.Available(); err != nil {
 		return Info{}, err
 	}
+	if err := readable(path); err != nil {
+		return Info{}, err
+	}
 	cmd := exec.CommandContext(ctx, f.FFprobePath, "-v", "error",
 		"-show_entries", "stream=codec_type,codec_name,width,height,avg_frame_rate,pix_fmt,nb_frames:stream_side_data=rotation:format=duration,bit_rate",
 		"-of", "json", path)
@@ -115,6 +119,13 @@ func infoFrom(response probeResponse) (Info, error) {
 	if info.FPS <= 0 {
 		return Info{}, output.New("could not determine a positive source frame rate", output.FixableByAgent).
 			WithHint("re-encode the source with a constant frame rate")
+	}
+	// FFprobe reports coded dimensions while FFmpeg autorotates on output, so a
+	// quarter-turn rotation means the frames that arrive are the other way up
+	// from the numbers here. Swapping now keeps every coordinate downstream —
+	// every region, and the projection image — describing what is on screen.
+	if info.Rotation%180 != 0 {
+		info.Width, info.Height = info.Height, info.Width
 	}
 	info.Duration, _ = strconv.ParseFloat(response.Format.Duration, 64)
 	info.BitRate, _ = strconv.ParseInt(response.Format.BitRate, 10, 64)
@@ -244,6 +255,26 @@ func even(v int) int {
 }
 
 func seconds(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
+
+// readable checks the obvious failure before handing the path to a subprocess,
+// so "no such file" arrives in this tool's voice rather than FFprobe's.
+func readable(path string) error {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return output.New(fmt.Sprintf("no file at %q", path), output.FixableByAgent).
+			WithHint("check the path; it is resolved relative to the current directory")
+	}
+	if err != nil {
+		return output.Wrap(err, output.FixableByHuman).WithHint("check the file's permissions")
+	}
+	if info.IsDir() {
+		return output.New(fmt.Sprintf("%q is a directory, not a video", path), output.FixableByAgent)
+	}
+	if info.Size() == 0 {
+		return output.New(fmt.Sprintf("%q is empty", path), output.FixableByAgent)
+	}
+	return nil
+}
 
 func hintOrDefault(stderr, fallback string) string {
 	if trimmed := strings.TrimSpace(stderr); trimmed != "" {

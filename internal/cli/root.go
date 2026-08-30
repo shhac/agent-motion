@@ -55,6 +55,7 @@ func newRoot(version string, dec video.Decoder) *cobra.Command {
 		projectCommand(g),
 		framesCommand(g),
 		sheetCommand(g),
+		compareCommand(g),
 		usageCommand(),
 	)
 	return root

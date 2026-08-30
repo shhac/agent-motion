@@ -74,7 +74,8 @@ func narrowest(events []motion.Event) *motion.Event {
 	return best
 }
 
-func limits(analysisWidth, sourceWidth int, threshold float64, fit motion.Assessment) []string {
+func limits(p Params, sourceWidth int, sourceFPS float64, fit motion.Assessment) []string {
+	analysisWidth, threshold := p.Width, p.Threshold
 	out := []string{}
 	if fit.Verdict != motion.FitGood {
 		out = append(out, fit.Reason+" "+fit.Advice)
@@ -86,6 +87,14 @@ func limits(analysisWidth, sourceWidth int, threshold float64, fit motion.Assess
 	if analysisWidth < sourceWidth {
 		out = append(out, fmt.Sprintf("Analysed at %dpx wide, downscaled from %dpx; features thinner than about %d source pixels may be missed. Use --native for full resolution.",
 			analysisWidth, sourceWidth, int(math.Ceil(float64(sourceWidth)/float64(analysisWidth)))))
+	}
+	if p.SampleFPS < sourceFPS-0.01 {
+		out = append(out, fmt.Sprintf(
+			"Sampled at %.3g fps from a %.3g fps source. Anything repeating faster than %.3g Hz is aliased: a flicker can be reported as a one-off change, or missed. Drop --sample-fps to see every frame.",
+			p.SampleFPS, sourceFPS, p.SampleFPS/2))
+	}
+	if p.DriftSeconds <= 0 {
+		out = append(out, "The slow timescale is off, so change too gradual to clear the threshold between adjacent frames — a fade, an easing animation, a creeping layout shift — is invisible. Raise --drift to see it.")
 	}
 	return append(out, "Regions are bounding boxes of change, not object outlines. Look at the frames before drawing conclusions.")
 }

@@ -13,6 +13,7 @@ COMMANDS
   sheet <video>      One image of many labelled frames. Shows what it looks like.
   project <video>    Timeline plus an activity-map PNG in source coordinates.
   frames <video>     Write real source frames at chosen timestamps.
+  compare <video>    Say exactly how two moments differ, and draw it.
   usage              This overview. '<command> --help' lists every flag.
 
 THE USUAL PATH
@@ -21,6 +22,13 @@ THE USUAL PATH
   3. agent-motion timeline clip.mp4 --start 17 --end 19 --threshold 4
                                             zoom into a suspicious range
   4. agent-motion frames clip.mp4 --at 17.6 look at the exact frame
+
+IS IT THE SAME AS IT WAS?
+  agent-motion compare clip.mp4 --at 14.9,18.5
+  Returns an exact pixel count, so "it came back" and "it only looks similar"
+  stop being a matter of eyeballing two stills. It separates identical from
+  merely below the threshold. Add -o diff.png to draw what differs — the only
+  way to see a change of a pixel or two.
 
 SEEING SOMETHING SMALL
   A 20x20 indicator is invisible in a 640px still. Crop to it and magnify:

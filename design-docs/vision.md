@@ -49,6 +49,12 @@ optical flow, camera stabilisation, audio, any network service, and any
 model-specific video-token pipeline. The tool reports where and when pixels
 changed. What that means is the agent's job, and every result says so.
 
+One consequence is worth stating, because an evaluation agent asked for it
+directly: the tool cannot tell a camera pan from wind in the grass. Both make
+the whole frame change continuously, and separating them needs optical flow.
+What it can do is notice that it cannot help, and say so — which is what the
+suitability verdict is for.
+
 ## Why this is not just frame differencing
 
 Frame differencing is the primitive, not the product. The product is what sits

@@ -10,6 +10,8 @@ agent-motion sheet    <video> [--at ...] [--count N] [--columns N] [--width N]
 agent-motion project  <video> [analysis flags] [-o path] [--legend]
 agent-motion frames   <video> --at ... [--dir path] [--width N]
                               [--region x0,y0,x1,y1] [--pad N]
+agent-motion compare <video> --at t1,t2 [--region x0,y0,x1,y1] [--pad N]
+                              [--threshold N] [-o path]
 agent-motion usage
 ```
 
@@ -24,7 +26,14 @@ The commands are ordered by cost, and each one's output points at the next.
 `inspect` decodes nothing. `timeline` decodes once and answers in text. `sheet`
 answers in one image. `project` is `timeline` plus an activity map, at source
 resolution, so it is the most expensive. `frames` is the last step, once a
-timestamp is known.
+timestamp is known. `compare` sits outside the ladder: it answers a question
+about two specific moments and decodes exactly two frames to do it.
+
+`compare` exists because every other command measures change between
+*neighbouring* frames. "Is this the same as it was earlier" is a different
+question, it comes up constantly — did the screen come back, did that region
+really revert — and without it the answer was two stills and a guess. Three of
+six evaluation agents named it as the single biggest gap.
 
 `project` returning the whole timeline is deliberate: an agent that wants the
 picture also wants the story, and the analysis pass that draws the picture has

@@ -2,6 +2,8 @@ package video
 
 import (
 	"image"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -192,4 +194,53 @@ func indexOf(list []string, want string) int {
 		}
 	}
 	return -1
+}
+
+// A quarter-turn rotation means the frames FFmpeg produces are the other way up
+// from the dimensions FFprobe reports, and every coordinate downstream depends
+// on getting that right.
+func TestRotatedSourcesReportDisplayDimensions(t *testing.T) {
+	portrait := stream{CodecType: "video", Width: 1920, Height: 1080, AvgFrameRate: "30/1"}
+	portrait.SideData = []sideData{{Rotation: -90}}
+	got, err := infoFrom(probeResponse{Streams: []stream{portrait}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Width != 1080 || got.Height != 1920 {
+		t.Errorf("got %dx%d, want the rotated 1080x1920 that is actually decoded", got.Width, got.Height)
+	}
+
+	upright := stream{CodecType: "video", Width: 1920, Height: 1080, AvgFrameRate: "30/1"}
+	upright.SideData = []sideData{{Rotation: 180}}
+	flipped, err := infoFrom(probeResponse{Streams: []stream{upright}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flipped.Width != 1920 || flipped.Height != 1080 {
+		t.Errorf("a half turn keeps the dimensions, got %dx%d", flipped.Width, flipped.Height)
+	}
+}
+
+func TestReadableRejectsWhatFFprobeWouldStumbleOn(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty.mp4")
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{
+		"missing":   filepath.Join(dir, "nope.mp4"),
+		"directory": dir,
+		"empty":     empty,
+	} {
+		if err := readable(path); err == nil {
+			t.Errorf("%s: expected a clear error before the subprocess runs", name)
+		}
+	}
+	real := filepath.Join(dir, "ok.mp4")
+	if err := os.WriteFile(real, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := readable(real); err != nil {
+		t.Errorf("a readable file should pass: %v", err)
+	}
 }

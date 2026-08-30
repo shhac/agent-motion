@@ -56,7 +56,28 @@ func (g Grid) Adjacent(a, b int) bool {
 	return dc <= 1 && dr <= 1
 }
 
+// minCellPixels keeps every cell large enough for an event to exist in it. The
+// per-cell floor never drops below two pixels, so a cell of two pixels or fewer
+// can never be reported as active at all, and a whole analysis silently returns
+// nothing. Small frames get a coarser grid rather than an impossible one.
+const minCellPixels = 12
+
 func newGrid(cols, rows, width, height int) Grid {
+	for cols > 1 && width/cols < 3 {
+		cols--
+	}
+	for rows > 1 && height/rows < 3 {
+		rows--
+	}
+	for cols*rows > 1 && (width/cols)*(height/rows) < minCellPixels {
+		if cols >= rows && cols > 1 {
+			cols--
+		} else if rows > 1 {
+			rows--
+		} else {
+			break
+		}
+	}
 	g := Grid{Cols: cols, Rows: rows, Width: width, Height: height, Pixels: make([]int, cols*rows)}
 	for i := range g.Pixels {
 		b := g.Bounds(i)

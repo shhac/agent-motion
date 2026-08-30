@@ -10,6 +10,7 @@ import (
 
 	"github.com/shhac/agent-motion/internal/engine"
 	"github.com/shhac/agent-motion/internal/fixture"
+	"github.com/shhac/agent-motion/internal/motion"
 	"github.com/shhac/agent-motion/internal/video"
 	output "github.com/shhac/lib-agent-output"
 )
@@ -21,7 +22,7 @@ func referenceDecoder() (*video.Fake, fixture.Scenario) {
 
 func TestAnalyseDescribesTheWholeVideo(t *testing.T) {
 	dec, s := referenceDecoder()
-	a, err := engine.New(dec).Analyse(context.Background(), engine.AnalyseOptions{Path: "ref.mp4"})
+	a, err := engine.New(dec).Analyse(context.Background(), engine.Defaults("ref.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,9 +51,7 @@ func TestAnalyseDescribesTheWholeVideo(t *testing.T) {
 
 func TestAnalyseHonoursTheSelectedInterval(t *testing.T) {
 	dec, _ := referenceDecoder()
-	a, err := engine.New(dec).Analyse(context.Background(), engine.AnalyseOptions{
-		Path: "ref.mp4", Start: 8, End: 13,
-	})
+	a, err := engine.New(dec).Analyse(context.Background(), withInterval(engine.Defaults("ref.mp4"), 8, 13))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +68,7 @@ func TestAnalyseHonoursTheSelectedInterval(t *testing.T) {
 
 func TestNativeAnalysesAtSourceResolution(t *testing.T) {
 	dec, s := referenceDecoder()
-	a, err := engine.New(dec).Analyse(context.Background(), engine.AnalyseOptions{Path: "ref.mp4", Native: true})
+	a, err := engine.New(dec).Analyse(context.Background(), nativeOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,29 +79,27 @@ func TestNativeAnalysesAtSourceResolution(t *testing.T) {
 
 func TestAnalyseRejectsAStartPastTheEnd(t *testing.T) {
 	dec, _ := referenceDecoder()
-	_, err := engine.New(dec).Analyse(context.Background(), engine.AnalyseOptions{Path: "ref.mp4", Start: 99})
+	_, err := engine.New(dec).Analyse(context.Background(), withStart(engine.Defaults("ref.mp4"), 99))
 	assertFixableBy(t, err, output.FixableByAgent)
 }
 
 func TestAnalyseSurfacesProbeFailure(t *testing.T) {
 	dec, _ := referenceDecoder()
 	dec.ProbeErr = output.New("no such file", output.FixableByHuman)
-	_, err := engine.New(dec).Analyse(context.Background(), engine.AnalyseOptions{Path: "missing.mp4"})
+	_, err := engine.New(dec).Analyse(context.Background(), engine.Defaults("missing.mp4"))
 	assertFixableBy(t, err, output.FixableByHuman)
 }
 
 func TestAnalyseRejectsAnIntervalTooShortToDifference(t *testing.T) {
 	dec, _ := referenceDecoder()
-	_, err := engine.New(dec).Analyse(context.Background(), engine.AnalyseOptions{
-		Path: "ref.mp4", Start: 1, End: 1.01,
-	})
+	_, err := engine.New(dec).Analyse(context.Background(), withInterval(engine.Defaults("ref.mp4"), 1, 1.01))
 	assertFixableBy(t, err, output.FixableByAgent)
 }
 
 func TestWriteProjectionProducesAnOpaqueImage(t *testing.T) {
 	dec, _ := referenceDecoder()
 	e := engine.New(dec)
-	a, err := e.Analyse(context.Background(), engine.AnalyseOptions{Path: "ref.mp4", Native: true})
+	a, err := e.Analyse(context.Background(), nativeOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +163,7 @@ func TestSheetChoosesItsOwnMomentsWhenNoneGiven(t *testing.T) {
 	result, err := engine.New(dec).Sheet(context.Background(), engine.SheetOptions{
 		Path: "ref.mp4", Count: 8, Width: 160,
 		Output:  filepath.Join(t.TempDir(), "sheet.png"),
-		Analyse: engine.AnalyseOptions{Path: "ref.mp4"},
+		Analyse: engine.Defaults("ref.mp4"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +194,7 @@ func TestSheetWithTimestampsStillLabelsTiles(t *testing.T) {
 	result, err := engine.New(dec).Sheet(context.Background(), engine.SheetOptions{
 		Path: "ref.mp4", At: []float64{3.5, 9.5, 15}, Width: 160,
 		Output:  filepath.Join(t.TempDir(), "sheet.png"),
-		Analyse: engine.AnalyseOptions{Path: "ref.mp4"},
+		Analyse: engine.Defaults("ref.mp4"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -294,4 +291,141 @@ func assertFixableBy(t *testing.T, err error, want output.FixableBy) {
 	if structured.FixableBy != want {
 		t.Errorf("fixable_by = %v, want %v", structured.FixableBy, want)
 	}
+}
+
+func withInterval(o engine.AnalyseOptions, start, end float64) engine.AnalyseOptions {
+	o.Start, o.End = start, end
+	return o
+}
+
+func withStart(o engine.AnalyseOptions, start float64) engine.AnalyseOptions {
+	o.Start = start
+	return o
+}
+
+func nativeOptions() engine.AnalyseOptions {
+	o := engine.Defaults("ref.mp4")
+	o.Native = true
+	return o
+}
+
+func TestCompareNeedsExactlyTwoTimestamps(t *testing.T) {
+	dec, _ := referenceDecoder()
+	for _, at := range [][]float64{nil, {1}, {1, 2, 3}} {
+		_, err := engine.New(dec).Compare(context.Background(), engine.CompareOptions{Path: "ref.mp4", At: at})
+		assertFixableBy(t, err, output.FixableByAgent)
+	}
+}
+
+func TestCompareReportsAnExactPixelCount(t *testing.T) {
+	dec, _ := referenceDecoder()
+	// 13.0s and 14.0s are both inside the alternate scene, which holds still.
+	same, err := engine.New(dec).Compare(context.Background(), engine.CompareOptions{
+		Path: "ref.mp4", At: []float64{16, 17}, Threshold: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !same.Identical || same.Changed != 0 {
+		t.Errorf("a held scene should compare identical, got %+v", same)
+	}
+	if !strings.Contains(same.Verdict, "identical") {
+		t.Errorf("verdict should say so plainly: %q", same.Verdict)
+	}
+
+	// 9.0s and 9.1s straddle the flicker panel toggling.
+	differs, err := engine.New(dec).Compare(context.Background(), engine.CompareOptions{
+		Path: "ref.mp4", At: []float64{9.0, 9.1}, Threshold: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if differs.Identical || differs.Changed == 0 {
+		t.Fatalf("the flicker panel toggles between these frames, got %+v", differs)
+	}
+	if differs.Differs[0] < 250 || differs.Differs[2] > 400 {
+		t.Errorf("the difference should be bounded to the panel, got %v", differs.Differs)
+	}
+}
+
+func TestCompareWritesTheDifference(t *testing.T) {
+	dec, _ := referenceDecoder()
+	path := filepath.Join(t.TempDir(), "diff.png")
+	result, err := engine.New(dec).Compare(context.Background(), engine.CompareOptions{
+		Path: "ref.mp4", At: []float64{9.0, 9.1}, Threshold: 12, Output: path,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Output != path || result.HowToRead == "" {
+		t.Errorf("a written difference must say how to read it, got %+v", result)
+	}
+}
+
+func TestZeroIsALiteralThresholdNotAMissingOne(t *testing.T) {
+	dec, _ := referenceDecoder()
+	opt := engine.Defaults("ref.mp4")
+	opt.Threshold = 0
+	a, err := engine.New(dec).Analyse(context.Background(), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Params.Threshold != 0 {
+		t.Errorf("threshold reported as %v; a legal value must not be swapped for the default", a.Params.Threshold)
+	}
+}
+
+func TestZeroBucketsOmitsTheSparkline(t *testing.T) {
+	dec, _ := referenceDecoder()
+	opt := engine.Defaults("ref.mp4")
+	opt.Buckets = 0
+	a, err := engine.New(dec).Analyse(context.Background(), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Sparkline != "" || a.BucketSeconds != 0 {
+		t.Errorf("--buckets 0 is documented as omitting the series, got %q / %v", a.Sparkline, a.BucketSeconds)
+	}
+}
+
+// Sampling below the source rate aliases anything that repeats quickly, and a
+// result that does not say so invites a confident wrong reading.
+func TestSampledAnalysisSaysItIsSampled(t *testing.T) {
+	dec, _ := referenceDecoder()
+	opt := engine.Defaults("ref.mp4")
+	opt.SampleFPS = 5
+	a, err := engine.New(dec).Analyse(context.Background(), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !anyContains(a.Limits, "Sampled at") {
+		t.Errorf("limits must mention the sample rate: %v", a.Limits)
+	}
+}
+
+func TestDriftOffSaysSoInLimits(t *testing.T) {
+	dec, _ := referenceDecoder()
+	opt := engine.Defaults("ref.mp4")
+	opt.DriftSeconds = 0
+	a, err := engine.New(dec).Analyse(context.Background(), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !anyContains(a.Limits, "slow timescale is off") {
+		t.Errorf("turning off the slow timescale must be stated: %v", a.Limits)
+	}
+	for _, e := range a.Events {
+		if e.Kind == motion.KindGradual {
+			t.Errorf("no gradual event is findable with drift off, got %+v", e)
+		}
+	}
+}
+
+func anyContains(list []string, want string) bool {
+	for _, s := range list {
+		if strings.Contains(s, want) {
+			return true
+		}
+	}
+	return false
 }

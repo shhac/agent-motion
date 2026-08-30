@@ -2,6 +2,46 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D17 — Rotation is applied, not just reported
+
+A quarter-turn source would have produced entirely wrong coordinates without
+failing: FFprobe reports coded dimensions, FFmpeg autorotates on output, and
+the scale filter forces the requested size, so the frames simply arrived the
+other way up and every region described the wrong part of the picture.
+Dimensions are now swapped at probe time.
+
+## D16 — Zero is a value, not a missing value
+
+`--threshold 0` was validated as legal, documented as the most sensitive
+setting, and then silently replaced with the default of 12. `--buckets 0` was
+documented in two places as omitting the activity series and silently gave 60.
+Both came from `withDefaults` treating zero as "unset".
+
+Options now take zero literally, a negative value means "use the default", and
+`engine.Defaults(path)` is how callers get the documented settings. The
+sentinel round trip between the CLI and the engine for "drift off" went away
+with it.
+
+A related gap: `--sample-fps` had no coverage and no mention in `limits`, so
+sampling the reference video at 1 fps reported its 10 Hz flicker as three
+one-off changes — confidently wrong, with nothing to warn a reader. Both the
+sampled rate and a disabled drift window now appear in `limits`.
+
+## D15 — Compare answers "is it the same as it was"
+
+Three of six evaluation agents, independently and across both rounds, named the
+same missing capability: a way to measure two arbitrary timestamps against each
+other. Every other command compares neighbouring frames, so "did the screen come
+back after that cut", "did the region really revert" and "is anything at all
+different here" could only be answered by putting two stills side by side and
+squinting — one agent reached for ImageMagick, another said it would have turned
+an inference into a fact.
+
+`compare` returns an exact pixel count and separates *identical* from *nothing
+above the threshold*, which on a lossy codec is the distinction that matters.
+With `-o` it draws the difference, because two nearly identical stills cannot
+be compared by eye — which is exactly when the answer matters most.
+
 ## D14 — The activity image names what it leaves out
 
 An agent found that `project` silently dropped four of seven events — every
