@@ -7,6 +7,7 @@ on:
 
 jobs:
   ci:
+    name: build + test + lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -14,9 +15,19 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go build ./...
-      - run: go vet ./...
-      - run: go test ./... -count=1
-      - uses: golangci/golangci-lint-action@v9
+
+      - name: Build
+        run: make build
+
+      # The suite runs against a synthetic scenario, so it needs no FFmpeg and
+      # no media on disk. If that ever stops being true this job will say so.
+      - name: Test
+        run: make test
+
+      - name: Vet
+        run: make vet
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.1

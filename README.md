@@ -115,7 +115,7 @@ infer it from the colours.
 make test    # runs with no FFmpeg and no media, against a synthetic scenario
 make vet
 make lint
-make fixture # renders the reference video used for evaluation
+make fixtures # renders the evaluation videos (needs FFmpeg; the tests do not)
 ```
 
 The design record is in [`design-docs/`](design-docs/), including a

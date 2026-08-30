@@ -6,6 +6,12 @@ GOCACHE ?= $(CURDIR)/.cache/go-build
 build:
 	GOCACHE=$(GOCACHE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/agent-motion
 
+# Renders every evaluation scenario.
+fixtures:
+	@$(MAKE) fixture SCENARIO=reference
+	@$(MAKE) fixture SCENARIO=defect
+	@$(MAKE) fixture SCENARIO=player
+
 test:
 	GOCACHE=$(GOCACHE) go test ./... -count=1
 
@@ -35,4 +41,4 @@ clean:
 	rm -f $(BINARY)
 	rm -rf dist/
 
-.PHONY: build test test-short fixture vet lint fmt dev clean
+.PHONY: build test test-short fixture fixtures vet lint fmt dev clean

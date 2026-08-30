@@ -48,8 +48,9 @@ GOCACHE=$(pwd)/.cache/go-build go vet ./...
 golangci-lint run ./...
 ```
 
-`make fixture` renders the reference video used for evaluation. It is the only
-thing here that needs FFmpeg.
+`make fixtures` renders the evaluation videos (`make fixture SCENARIO=player`
+for one). They are the only thing here that needs FFmpeg; the test suite does
+not, and must not start to.
 
 ## Keeping docs in sync
 
