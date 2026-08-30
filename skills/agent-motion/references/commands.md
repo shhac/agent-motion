@@ -98,6 +98,11 @@ Measures two arbitrary timestamps against each other.
 | `--pad` | 0 | Widen `--region` by this many pixels on every side. |
 | `--output`, `-o` | none | Draw the difference to this PNG. |
 
+Seeking snaps to the frame at or after the time you ask for, so two timestamps
+a few milliseconds apart can land on the same side of a one-frame event and
+report no difference. To straddle a moment, put one clearly before and one
+clearly after; `compare` warns in `note` when they are too close to be sure.
+
 `identical` means not one pixel differs. `changed_pixels` of zero with
 `identical: false` means the difference is below the threshold — codec noise.
 The drawn difference is at source resolution within the region, so use `--pad`

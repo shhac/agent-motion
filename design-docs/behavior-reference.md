@@ -167,6 +167,11 @@ region. It reports the changed count, the largest single-pixel difference and a
 bounding box, and separates *identical* from *nothing above the threshold* —
 on a lossy codec the second is what an unchanged screen actually looks like.
 
+Seeking snaps to the frame at or after the time requested, so two timestamps
+less than three frames apart can land on the same side of a brief event. The
+result says so in `note` rather than leaving a reader to conclude nothing
+changed.
+
 The drawn difference is the later frame at 30% brightness with differing pixels
 lit in proportion to the square root of their delta, so a one-shade change is
 still visible beside a region that changed completely.

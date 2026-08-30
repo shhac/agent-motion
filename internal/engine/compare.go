@@ -28,6 +28,7 @@ type Comparison struct {
 	Differs   [4]int `json:"differs_within_xyxy,omitempty"`
 	Output    string `json:"output,omitempty"`
 	Verdict   string `json:"verdict"`
+	Note      string `json:"note,omitempty"`
 	HowToRead string `json:"how_to_read,omitempty"`
 }
 
@@ -39,6 +40,10 @@ type CompareOptions struct {
 	Region    Region
 	Output    string
 }
+
+// seekMargin is how many frames apart two timestamps must be before they can
+// be relied on to fall either side of something.
+const seekMargin = 3
 
 // Compare measures how much two moments of a video differ, and optionally draws
 // it. Everything else in the tool compares neighbouring frames; this answers a
@@ -91,6 +96,7 @@ func (e *Engine) Compare(ctx context.Context, opt CompareOptions) (*Comparison, 
 		}
 	}
 	result.Verdict = verdict(d, times, opt.Threshold)
+	result.Note = seekNote(times, info.FPS)
 
 	if opt.Output != "" {
 		if err := render.Write(opt.Output, render.Diff(frames[1], d)); err != nil {
@@ -115,6 +121,20 @@ func verdict(d motion.Difference, times []float64, threshold float64) string {
 			d.Changed, d.Total(), d.Fraction()*100, clock(times[0]), clock(times[1]),
 			d.Box.Dx(), d.Box.Dy(), d.MaxDelta)
 	}
+}
+
+// seekNote warns when two timestamps are close enough to land on the same
+// frame. Seeking snaps to the frame at or after the time asked for, so two
+// times a hundredth of a second apart around a one-frame event routinely
+// resolve to the same side of it and the difference reads as nothing.
+func seekNote(times []float64, fps float64) string {
+	gap := times[1] - times[0]
+	if fps <= 0 || gap >= seekMargin/fps {
+		return ""
+	}
+	return fmt.Sprintf(
+		"These timestamps are %.0f ms apart, about %.1f frames at %.3g fps. Seeking snaps to the frame at or after each time, so both can land on the same side of a brief event and the difference then reads as nothing. To straddle a moment, put one timestamp clearly before it and one clearly after — %.0f ms apart or more.",
+		gap*1000, gap*fps, fps, seekMargin*1000/fps)
 }
 
 func clock(t float64) string { return fmt.Sprintf("%.2fs", t) }

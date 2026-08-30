@@ -429,3 +429,27 @@ func anyContains(list []string, want string) bool {
 	}
 	return false
 }
+
+// Two timestamps closer than a frame routinely land on the same side of a
+// one-frame event, and the difference then reads as nothing at all.
+func TestCompareWarnsWhenTimestampsAreWithinAFrame(t *testing.T) {
+	dec, _ := referenceDecoder()
+	near, err := engine.New(dec).Compare(context.Background(), engine.CompareOptions{
+		Path: "ref.mp4", At: []float64{8.00, 8.05}, Threshold: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if near.Note == "" {
+		t.Error("timestamps under three frames apart must come with a warning")
+	}
+	apart, err := engine.New(dec).Compare(context.Background(), engine.CompareOptions{
+		Path: "ref.mp4", At: []float64{8.0, 9.0}, Threshold: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apart.Note != "" {
+		t.Errorf("a second apart needs no warning, got %q", apart.Note)
+	}
+}
