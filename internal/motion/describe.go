@@ -131,7 +131,7 @@ func classify(e Event, stats groupStats) string {
 	brief := stats.active <= 2
 
 	switch {
-	case brief && truthy(e.Persists):
+	case brief && persisted(e.Persists):
 		return KindStep
 	case brief:
 		return KindBlip

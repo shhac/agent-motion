@@ -210,7 +210,7 @@ func (a *Analyzer) wholeFrameEvents(opt TimelineOptions, consumed []bool) []Even
 		// One transition that stays is a boundary; anything that comes back is
 		// a flash, however briefly it lasted.
 		kind := KindCut
-		if sp.to > sp.from || falsey(persists) {
+		if sp.to > sp.from || reverted(persists) {
 			kind = KindFlash
 		}
 		e := Event{

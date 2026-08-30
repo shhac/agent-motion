@@ -305,8 +305,8 @@ func (a *Analyzer) mark(cells []Cell, p int) {
 	x, y := p%a.width, p/a.width
 	m := &cells[(y*a.grid.Rows/a.height)*a.grid.Cols+(x*a.grid.Cols/a.width)].M[fast]
 	m.Count++
-	m.MinX, m.MinY = minI16(m.MinX, int16(x)), minI16(m.MinY, int16(y))
-	m.MaxX, m.MaxY = maxI16(m.MaxX, int16(x)), maxI16(m.MaxY, int16(y))
+	m.MinX, m.MinY = min(m.MinX, int16(x)), min(m.MinY, int16(y))
+	m.MaxX, m.MaxY = max(m.MaxX, int16(x)), max(m.MaxY, int16(y))
 }
 
 // Frames is the number of frames folded in.

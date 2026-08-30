@@ -63,7 +63,7 @@ func (e *Engine) Sheet(ctx context.Context, opt SheetOptions) (*SheetResult, err
 	}
 	box := opt.Region.Rect(info)
 	result := &SheetResult{
-		Input: opt.Path, Output: opt.Output, Thumbnail: opt.Width,
+		Input: opt.Path, Output: opt.Output,
 		Chosen:    "the timestamps you passed with --at",
 		HowToRead: "Frames run left to right, top to bottom. Each caption is the tile number, its timestamp in the source video, and the event it falls inside.",
 	}
@@ -96,6 +96,9 @@ func (e *Engine) Sheet(ctx context.Context, opt SheetOptions) (*SheetResult, err
 	tiles, err := e.sheetTiles(ctx, opt, info, box, times, analysis, result)
 	if err != nil {
 		return nil, err
+	}
+	if len(tiles) > 0 {
+		result.Thumbnail = tiles[0].Image.Bounds().Dx()
 	}
 	sheet := render.Sheet(tiles, render.SheetOptions{Columns: opt.Columns})
 	if err := render.Write(opt.Output, sheet); err != nil {

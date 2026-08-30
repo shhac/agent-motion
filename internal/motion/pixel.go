@@ -21,20 +21,6 @@ func abs(v int) int {
 	return v
 }
 
-func minI16(a, b int16) int16 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxI16(a, b int16) int16 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func downsample(src []byte, sw, sh int, dst []byte, dw, dh int) {
 	for y := 0; y < dh; y++ {
 		sy := y * sh / dh

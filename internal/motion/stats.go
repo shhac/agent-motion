@@ -47,6 +47,9 @@ func median(values []float64) float64 {
 	return quantile(sorted, 0.5)
 }
 
-func truthy(b *bool) bool { return b != nil && *b }
+// persisted and reverted are deliberately not named after truthiness: a nil
+// Persists means "could not be compared", and in the borrowed vocabulary that
+// would read as reverted, which is the opposite of what it means.
+func persisted(b *bool) bool { return b != nil && *b }
 
-func falsey(b *bool) bool { return b != nil && !*b }
+func reverted(b *bool) bool { return b != nil && !*b }
