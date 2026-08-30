@@ -24,6 +24,29 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D28 — A real reflow, and the two false positives it exposed
+
+The layout fixture translates solid blocks, so it could not answer whether shift
+measurement works on an actual layout engine. A local page settles it: a 600x200
+image with no dimensions served two seconds late, so Chrome lays the page out
+without it and reflows by exactly 200px when it arrives.
+
+It measures exactly 200px. But the same frames also produced a confident 426px
+sideways move that never happened, and first paint — a blank page filling with
+content — was reported as content moving. Neither was reachable from a synthetic
+fixture, because both need a real page's whitespace.
+
+Two guards, both calibrated on the measurements rather than guessed:
+
+**A translation must explain the change.** After a real translation, almost
+nothing is left over: the true vertical offset leaves a residual of 0.05 of the
+profile's own spread, while the spurious horizontal match leaves 3.3 of it. An
+offset is now refused unless its residual is small next to the signal.
+
+**A featureless profile cannot be translated.** A blank page has a spread of
+exactly 0.000, so every offset fits it equally well and none of them means
+anything. This is the same trap the shade test hit, and the same answer.
+
 ## D27 — Long activity is not long trouble
 
 The same real-page trial: six seconds of "sustained activity" on a news ticker

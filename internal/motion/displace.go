@@ -36,6 +36,20 @@ const minShiftConfidence = 0.55
 // in TestAxisGainSeparatesMovementFromNoise.
 const minAxisGain = 0.25
 
+// A translation leaves almost nothing behind: after[i] is before[i-d], so what
+// is left over should be small next to the variation in the signal itself.
+// Measured on a real browser reflow — a 600x200 image with no dimensions
+// loading late, pushing the page down exactly 200px — the true vertical offset
+// leaves a residual of 0.05 of the profile's spread, while a spurious
+// horizontal match on the same frames leaves 3.3 of it.
+const maxResidualShare = 0.4
+
+// minProfileSpread is how much variation a profile needs before an offset in it
+// means anything. A blank page before first paint has a spread of exactly zero
+// and can be "translated" onto anything, which is how content appearing came to
+// be reported as content moving.
+const minProfileSpread = 2.0
+
 // Translation finds how far the content inside a region moved between two
 // frames.
 //
@@ -87,8 +101,14 @@ func bestOffset(before, after []float64, limit int) (int, float64) {
 			bestD, best = d, distance
 		}
 	}
-	if bestD == 0 || zero-best < minAxisGain {
+	spread := spreadOf(before)
+	switch {
+	case bestD == 0, zero-best < minAxisGain:
 		return 0, 0
+	case spread < minProfileSpread:
+		return 0, 0 // nothing to register against; any offset would fit
+	case best > maxResidualShare*spread:
+		return 0, 0 // the offset does not actually explain the change
 	}
 	return bestD, 1 - best/zero
 }
@@ -327,3 +347,18 @@ func shiftScore(area float64, dx, dy int, opt TimelineOptions) float64 {
 func rect(r [4]int) image.Rectangle { return image.Rect(r[0], r[1], r[2], r[3]) }
 
 func area(r image.Rectangle) int { return r.Dx() * r.Dy() }
+
+// spreadOf is the standard deviation of a profile: how much signal there is to
+// register against.
+func spreadOf(p []float64) float64 {
+	if len(p) == 0 {
+		return 0
+	}
+	var sum, sumSq float64
+	for _, v := range p {
+		sum += v
+		sumSq += v * v
+	}
+	n := float64(len(p))
+	return math.Sqrt(math.Max(0, sumSq/n-(sum/n)*(sum/n)))
+}

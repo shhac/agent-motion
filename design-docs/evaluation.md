@@ -151,6 +151,33 @@ became D26: a modal backdrop that was indistinguishable from a theme change, and
 a settle time that a scrolling ticker rendered meaningless. Its verdict on the
 page — no genuine layout-shift bug, and `check` passing — held up.
 
+## A real browser doing a real reflow
+
+The synthetic layout fixture translates solid blocks, which left an open
+question the eight real page loads could not settle: does shift measurement fire
+on an actual layout engine at all, or only on rendered rectangles?
+
+A local page answers it with ground truth intact. A 600x200 image with no
+`width` or `height` — the textbook cause of layout shift — is served two seconds
+late, so the browser lays the page out without it and reflows when it lands,
+pushing everything below down by exactly 200px. Real Chrome, real reflow, real
+lossy recording, known answer.
+
+It measures **exactly 200px**. That is the strongest evidence in this document.
+
+Getting there exposed two false positives that the synthetic fixtures could not
+have produced, because both need a real page's whitespace:
+
+- The same frames also yielded a confident **426px sideways move that never
+  happened**. A page is mostly white, so a column profile can be slid a long way
+  and still look better than not sliding it.
+- **First paint was reported as content moving.** A blank page has a profile
+  spread of exactly zero, so every offset fits it equally.
+
+Both are now refused, on measurements rather than intuition: the true vertical
+offset leaves a residual of 0.05 of the profile's own spread, the spurious
+horizontal one leaves 3.3, and a blank page leaves a spread of 0.000.
+
 ## Agent trials
 
 The tool is for agents, so it is tested by giving agents a video and no context

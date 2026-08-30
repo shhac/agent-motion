@@ -90,3 +90,57 @@ func TestAppearingContentIsNotAShift(t *testing.T) {
 		t.Errorf("a badge appearing was reported as a move of %+v", got)
 	}
 }
+
+// TestTranslationRefusesWhatItCannotExplain covers the two ways a fit can be
+// meaningless, both found on a real browser reflow rather than reasoned about.
+//
+// A 600x200 image with no dimensions loading late pushed a page down exactly
+// 200px. The vertical offset was right, but the same frames also produced a
+// confident 426px sideways move that never happened, and first paint — a blank
+// page filling with content — was reported as content moving.
+func TestTranslationRefusesWhatItCannotExplain(t *testing.T) {
+	region := image.Rect(0, 0, 320, 200)
+
+	t.Run("a featureless start cannot be translated", func(t *testing.T) {
+		// This is first paint: a blank page has a profile spread of zero, so
+		// every offset fits it equally and none of them means anything.
+		if got := Translation(flat(255), textured(3), region, 60); got.Moved() {
+			t.Errorf("content appearing on a blank page was reported as a move of %+v", got)
+		}
+	})
+
+	t.Run("an offset that does not explain the change is refused", func(t *testing.T) {
+		// New content in part of the region, nothing moved. Some offset will
+		// always reduce the difference a little; it must not be believed.
+		before := textured(4)
+		after := image.NewRGBA(before.Bounds())
+		copy(after.Pix, before.Pix)
+		for y := 40; y < 120; y++ {
+			for x := 30; x < 260; x++ {
+				after.SetRGBA(x, y, color.RGBA{0x40, 0x80, 0xc0, 0xff})
+			}
+		}
+		if got := Translation(before, after, region, 60); got.Moved() {
+			t.Errorf("content appearing in a region was reported as a move of %+v", got)
+		}
+	})
+
+	t.Run("a real translation is still measured", func(t *testing.T) {
+		before := textured(5)
+		after := image.NewRGBA(before.Bounds())
+		for y := 0; y < 200; y++ {
+			for x := 0; x < 320; x++ {
+				src := y - 20
+				if src < 0 {
+					after.SetRGBA(x, y, color.RGBA{0, 0, 0, 0xff})
+					continue
+				}
+				after.Set(x, y, before.At(x, src))
+			}
+		}
+		got := Translation(before, after, region, 60)
+		if got.DY != 20 || got.DX != 0 {
+			t.Errorf("a 20px drop measured as %+v, want DY=20 DX=0", got)
+		}
+	})
+}
