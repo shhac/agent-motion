@@ -110,6 +110,41 @@ func (a *Analyzer) gradualEvent(e Event, opt TimelineOptions) Event {
 	return e
 }
 
+// The shape of something animating: it runs for a good share of the interval,
+// steadily, in one small fixed place.
+const (
+	continuousShare = 0.25
+	continuousDuty  = 0.6
+	continuousArea  = 0.15
+)
+
+// continuous reports activity shaped like an animation rather than a fault.
+//
+// It is a statement about shape, not about meaning — the tool cannot tell a
+// marquee from a stuck render, and says so. But six seconds of "sustained
+// activity" reads as unresolved trouble, and noting that it ran steadily in one
+// small fixed place for half the recording is both true and the thing a reader
+// needs in order to weigh it.
+func continuous(e Event, stats groupStats, opt TimelineOptions) bool {
+	if e.Kind != KindBusy && e.Kind != KindFlicker {
+		return false
+	}
+	if opt.Span <= 0 || stats.frames == 0 {
+		return false
+	}
+	if (e.End-e.Start)/opt.Span < continuousShare || e.RegionArea > continuousArea {
+		return false
+	}
+	// A flicker is repetition by definition, and a slow blink is active in few
+	// frames however steadily it runs — so duty is the wrong question for it.
+	// For undifferentiated activity it is the right one: something changing in
+	// most frames is animating, something changing in a handful is not.
+	if e.Kind == KindFlicker {
+		return true
+	}
+	return float64(stats.active)/float64(stats.frames) >= continuousDuty
+}
+
 func (a *Analyzer) fastEvent(e Event, stats groupStats, opt TimelineOptions) Event {
 	e.Direction, e.TravelPixels = a.travel(stats, opt)
 	if e.TravelPixels > 0 {
@@ -126,6 +161,7 @@ func (a *Analyzer) fastEvent(e Event, stats groupStats, opt TimelineOptions) Eve
 			e.ChangesPerSecond = math.Round(float64(stats.active)/duration*10) / 10
 		}
 	}
+	e.Continuous = continuous(e, stats, opt)
 	e.round()
 	e.Summary = summarise(e, opt)
 	return e
@@ -211,8 +247,8 @@ func summarise(e Event, opt TimelineOptions) string {
 		return fmt.Sprintf("Brief change at %s in the %s (%s) that reverts immediately.",
 			clock(e.Start), e.Position, size)
 	case KindFlicker:
-		return fmt.Sprintf("Repeated toggling from %s to %s in the %s (%s), about %.1f changes per second over %.2fs.",
-			clock(e.Start), clock(e.End), e.Position, size, e.ChangesPerSecond, duration)
+		return fmt.Sprintf("Repeated toggling from %s to %s in the %s (%s), about %.1f changes per second over %.2fs.%s",
+			clock(e.Start), clock(e.End), e.Position, size, e.ChangesPerSecond, duration, animating(e, duration))
 	case KindMotion:
 		text := fmt.Sprintf("Movement from %s to %s in the %s (%s); the active area travels %s across about %d px. The region is the whole path swept, not the size of the thing moving.",
 			clock(e.Start), clock(e.End), e.Position, size, e.Direction, e.TravelPixels)
@@ -226,9 +262,19 @@ func summarise(e Event, opt TimelineOptions) string {
 			return fmt.Sprintf("Most of the frame (%s) is changing continuously from %s to %s. This is whole-frame motion rather than one localised event; its start and end are where activity crossed the noise floor, not real boundaries.",
 				size, clock(e.Start), clock(e.End))
 		}
-		return fmt.Sprintf("Sustained activity from %s to %s in the %s (%s), averaging %.2f%% of the frame changing per step.",
-			clock(e.Start), clock(e.End), e.Position, size, e.MeanChanged*100)
+		return fmt.Sprintf("Sustained activity from %s to %s in the %s (%s), averaging %.2f%% of the frame changing per step.%s",
+			clock(e.Start), clock(e.End), e.Position, size, e.MeanChanged*100, animating(e, duration))
 	}
+}
+
+// animating names the shape when an event looks like ongoing decoration, so a
+// long stretch of activity is not mistaken for a long stretch of trouble.
+func animating(e Event, duration float64) string {
+	if !e.Continuous {
+		return ""
+	}
+	return fmt.Sprintf(" It runs steadily for %.1fs in one small fixed place, which is the shape of something animating continuously rather than a fault — but the tool cannot tell a marquee from a stuck render, so look before deciding.",
+		duration)
 }
 
 func wholeFrameSummary(e Event) string {

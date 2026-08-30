@@ -135,3 +135,35 @@ func TestQuietGapsOnAStillScreenAreNotStalls(t *testing.T) {
 		}
 	}
 }
+
+// A heartbeat pulsing for half a recording is animation, not trouble, and
+// saying so is what stops a long stretch of activity reading as a long stretch
+// of fault. It is a claim about shape only — the summary says outright that the
+// tool cannot tell a marquee from a stuck render.
+func TestOngoingAnimationIsNamedAsShape(t *testing.T) {
+	timeline, _ := defectTimeline(t)
+	marked := 0
+	for _, e := range timeline.Events {
+		if e.Kind != motion.KindFlicker {
+			continue
+		}
+		if !e.Continuous {
+			t.Errorf("the heartbeat at %.2fs runs for %.1fs in a 20x20 region and was not called continuous",
+				e.Start, e.End-e.Start)
+			continue
+		}
+		marked++
+		if !strings.Contains(e.Summary, "cannot tell") {
+			t.Errorf("the summary must disclaim the meaning it cannot know: %q", e.Summary)
+		}
+	}
+	if marked == 0 {
+		t.Fatal("expected the heartbeat flickers to be marked")
+	}
+	// The one-off faults beside it must not be swept up in the same label.
+	for _, e := range timeline.Events {
+		if e.Kind == motion.KindShift && e.Continuous {
+			t.Errorf("a one-off shift was called ongoing animation: %+v", e)
+		}
+	}
+}

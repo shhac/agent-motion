@@ -94,6 +94,19 @@ OUTPUT
   Read 'narrative' first, then 'events', then 'limits'. The 'limits' field says
   what this run could not have seen.
 
+DID IT FINISH?
+  settled_at_seconds        when anything last changed
+  layout_settled_at_seconds when the *content* last changed
+  A ticker or spinner keeps the first late forever while the page has been
+  stable for seconds. For "has this finished loading", read the second.
+  Events marked continuous run steadily in one small fixed place for much of
+  the interval — the shape of animation, not of a fault.
+
+  A cut also reports uniform_shade_change. True means the whole frame changed
+  brightness together and the content underneath is unchanged: an overlay, a
+  dim or a theme switch, not a new screen. shade_scale near 0.5 means dimmed
+  to half.
+
 SUITABILITY
   Every analysis reports 'suitability'. When the verdict is not "suitable",
   most of the frame is moving at once — a camera pan, a scroll, full-motion

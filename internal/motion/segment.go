@@ -10,11 +10,14 @@ import (
 type TimelineOptions struct {
 	FPS                       float64
 	SourceWidth, SourceHeight int
-	DriftSeconds              float64
-	CutFraction               float64
-	MergeGap                  float64
-	MinFloor                  float64
-	MaxEvents                 int
+	// Span is the length of the analysed interval, used to judge whether an
+	// event occupies enough of it to count as continuous. Timeline sets it.
+	Span         float64
+	DriftSeconds float64
+	CutFraction  float64
+	MergeGap     float64
+	MinFloor     float64
+	MaxEvents    int
 }
 
 func (o TimelineOptions) withDefaults() TimelineOptions {

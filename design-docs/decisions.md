@@ -24,6 +24,23 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D27 — Long activity is not long trouble
+
+The same real-page trial: six seconds of "sustained activity" on a news ticker
+read as unresolved jank, and the agent had to pull frames across the whole span
+to establish it was a marquee.
+
+Events now carry `continuous` when they run for at least a quarter of the
+interval, steadily, in a region under 15% of the frame. That is the shape of
+something animating, and the summary says so while stating plainly that the
+tool cannot tell a marquee from a stuck render.
+
+Duty is the right test for undifferentiated activity and the wrong one for a
+flicker: a slow blink is active in few frames however steadily it runs, so
+repetition is its own evidence of steadiness. The defect scenario's heartbeat is
+marked, its one-off shift is not, and the brief flickers in the other scenarios
+fall below the share threshold.
+
 ## D26 — Two whole-frame changes that look identical, and two kinds of settling
 
 A trial on a real Forbes page load, which is the first time an agent had one.

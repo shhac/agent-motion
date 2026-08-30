@@ -148,7 +148,10 @@ Two fields, and the difference between them matters:
 
 A ticker, a spinner or a video player keeps the first one late forever while the
 page itself has been stable for seconds. For "has this finished loading", read
-the second.
+the second. Events with `continuous: true` are the ones doing that: activity
+running steadily in one small fixed place for much of the interval. That is a
+claim about shape, not meaning — the tool cannot tell a marquee from a stuck
+render, and says so.
 
 A `cut` also reports `uniform_shade_change`. True means the whole frame changed
 brightness together and the content underneath is unchanged — a modal backdrop

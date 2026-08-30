@@ -62,8 +62,13 @@ type Event struct {
 	ShadeScale float64 `json:"shade_scale,omitempty"`
 	// Persists reports whether the region still looks different afterwards.
 	// It is nil when there was no checkpoint to compare against.
-	Persists *bool  `json:"persists,omitempty"`
-	Summary  string `json:"summary"`
+	// Continuous marks activity that runs for much of the interval, steadily,
+	// in one small fixed place. That is the shape of something animating rather
+	// than something going wrong, and without it six seconds of "sustained
+	// activity" reads as unresolved jank when it is a marquee.
+	Continuous bool   `json:"continuous,omitempty"`
+	Persists   *bool  `json:"persists,omitempty"`
+	Summary    string `json:"summary"`
 }
 
 // Timeline is the described result of one analysis pass.
@@ -85,6 +90,9 @@ func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 	if len(a.samples) == 0 {
 		return Timeline{Events: []Event{}}
 	}
+	from, to := a.Span()
+	opt.Span = to - from
+
 	consumed := make([]bool, len(a.samples))
 	events := a.wholeFrameEvents(opt, consumed)
 
@@ -102,11 +110,10 @@ func (a *Analyzer) Timeline(opt TimelineOptions) Timeline {
 	events = append(events, stalls(events, a.samples)...)
 	sort.Slice(events, func(i, j int) bool { return events[i].Start < events[j].Start })
 
-	start, end := a.Span()
 	t := Timeline{
 		NoiseFloor: round4(median(floors)),
 		Events:     events,
-		Fit:        assess(events, a.samples, end-start),
+		Fit:        assess(events, a.samples, opt.Span),
 	}
 	if len(events) > opt.MaxEvents {
 		t.Events = trimToBudget(events, opt.MaxEvents)
