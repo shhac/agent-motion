@@ -201,3 +201,49 @@ func readPNG(t *testing.T, path string) image.Image {
 	}
 	return img
 }
+
+// --during exists because working out a step size by hand for every event was
+// the main source of manual iteration for agents using the tool.
+func TestDuringSamplesAWindowEvenly(t *testing.T) {
+	got, err := run(t, "sheet", "ref.mp4", "--during", "9:11", "--count", "5",
+		"--quick", "-o", filepath.Join(t.TempDir(), "s.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tiles, _ := got["tiles"].([]any)
+	if len(tiles) != 5 {
+		t.Fatalf("got %d tiles, want the 5 asked for", len(tiles))
+	}
+	want := []float64{9, 9.5, 10, 10.5, 11}
+	for i, tile := range tiles {
+		at := tile.(map[string]any)["time_seconds"].(float64)
+		if at != want[i] {
+			t.Errorf("tile %d at %v, want %v — the window should be covered end to end", i+1, at, want[i])
+		}
+	}
+}
+
+func TestDuringWorksOnFrames(t *testing.T) {
+	dir := t.TempDir()
+	got, err := run(t, "frames", "ref.mp4", "--during", "2-5", "--count", "4", "--dir", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, _ := got["frames"].([]any)
+	if len(frames) != 4 {
+		t.Fatalf("got %d frames, want 4", len(frames))
+	}
+}
+
+func TestDuringRejectsNonsense(t *testing.T) {
+	cases := map[string][]string{
+		"no separator":  {"sheet", "ref.mp4", "--during", "13.07"},
+		"reversed":      {"sheet", "ref.mp4", "--during", "5:2"},
+		"with --at too": {"sheet", "ref.mp4", "--during", "2:5", "--at", "3"},
+	}
+	for name, args := range cases {
+		if _, err := run(t, args...); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

@@ -86,8 +86,8 @@ func projectCommand(g *globals) *cobra.Command {
 
 func framesCommand(g *globals) *cobra.Command {
 	var at []string
-	var dir, region string
-	var width, pad int
+	var dir, region, during string
+	var width, pad, count int
 	cmd := &cobra.Command{
 		Use:   "frames <video>",
 		Short: "Write real source frames at chosen timestamps",
@@ -95,7 +95,7 @@ func framesCommand(g *globals) *cobra.Command {
 			"shows. Use it after timeline has told you which moments matter.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			times, err := parseTimes(at)
+			times, err := timestamps(at, during, count)
 			if err != nil {
 				return err
 			}
@@ -116,6 +116,8 @@ func framesCommand(g *globals) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&at, "at", nil, "Timestamps in seconds, e.g. --at 3.4,7.1")
+	cmd.Flags().StringVar(&during, "during", "", "Sample evenly across a window, e.g. --during 13.07:13.40; paste an event's span")
+	cmd.Flags().IntVar(&count, "count", 6, "How many frames --during takes")
 	cmd.Flags().StringVar(&dir, "dir", "", "Destination directory (default: <video>.frames)")
 	cmd.Flags().IntVar(&width, "width", 0, "Scale frames to this width (default: source width)")
 	cmd.Flags().StringVar(&region, "region", "", "Crop to x0,y0,x1,y1 in source pixels; paste an event's region_xyxy")
@@ -169,7 +171,7 @@ func compareCommand(g *globals) *cobra.Command {
 func sheetCommand(g *globals) *cobra.Command {
 	var flags analyseFlags
 	var at []string
-	var destination, region string
+	var destination, region, during string
 	var count, columns, width, pad int
 	var quick bool
 	cmd := &cobra.Command{
@@ -183,7 +185,7 @@ func sheetCommand(g *globals) *cobra.Command {
 			if err := flags.validate(); err != nil {
 				return err
 			}
-			times, err := parseTimes(at)
+			times, err := timestamps(at, during, count)
 			if err != nil {
 				return err
 			}
@@ -207,7 +209,8 @@ func sheetCommand(g *globals) *cobra.Command {
 	}
 	flags.bind(cmd)
 	cmd.Flags().StringSliceVar(&at, "at", nil, "Timestamps in seconds; omit to let the analysis choose")
-	cmd.Flags().IntVar(&count, "count", 12, "How many frames to show when the analysis chooses them")
+	cmd.Flags().StringVar(&during, "during", "", "Sample evenly across a window, e.g. --during 13.07:13.40; paste an event's span")
+	cmd.Flags().IntVar(&count, "count", 12, "How many frames to show, for --during or when the analysis chooses")
 	cmd.Flags().IntVar(&columns, "columns", 0, "Grid columns (default: chosen to stay roughly square)")
 	cmd.Flags().IntVar(&width, "width", 320, "Thumbnail width in pixels")
 	cmd.Flags().StringVarP(&destination, "output", "o", "", "Destination PNG (default: <video>.sheet.png)")

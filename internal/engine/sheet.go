@@ -64,7 +64,7 @@ func (e *Engine) Sheet(ctx context.Context, opt SheetOptions) (*SheetResult, err
 	box := opt.Region.Rect(info)
 	result := &SheetResult{
 		Input: opt.Path, Output: opt.Output,
-		Chosen:    "the timestamps you passed with --at",
+		Chosen:    "the timestamps you asked for",
 		HowToRead: "Frames run left to right, top to bottom. Each caption is the tile number, its timestamp in the source video, and the event it falls inside.",
 	}
 	if !box.Empty() {

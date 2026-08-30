@@ -64,6 +64,20 @@ agent-motion sheet recording.mp4 --at 3.4,7.1,12.0
 agent-motion frames recording.mp4 --at 17.62      # full-size stills
 ```
 
+## Watching one event unfold
+
+An event's start and end say a panel toggled ten times a second, or a colour
+drifted for four seconds. Neither says what the toggle or the drift *looks*
+like. Paste the event's own span back in and let the tool space the samples:
+
+```sh
+agent-motion sheet recording.mp4 --during 13.07:13.40 --count 10 \
+  --region 498,38,582,102 --pad 12 --quick
+```
+
+`--during` works on `frames` too. `next_steps` proposes one of these for any
+event with internal cadence.
+
 ## Seeing something small
 
 A 20x20 indicator or a 2px layout shift is invisible in a full-frame still.

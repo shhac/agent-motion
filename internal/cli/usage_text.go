@@ -23,6 +23,12 @@ THE USUAL PATH
                                             zoom into a suspicious range
   4. agent-motion frames clip.mp4 --at 17.6 look at the exact frame
 
+WATCHING ONE EVENT UNFOLD
+  agent-motion sheet clip.mp4 --during 13.07:13.40 --count 10 --quick
+  An event's start and end do not say what a toggle or a drift looks like.
+  Paste the event's own span back in and the samples are spaced for you.
+  --during works on frames too.
+
 IS IT THE SAME AS IT WAS?
   agent-motion compare clip.mp4 --at 14.9,18.5
   Returns an exact pixel count, so "it came back" and "it only looks similar"

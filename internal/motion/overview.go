@@ -171,7 +171,10 @@ func inspectTimes(events []Event) []float64 {
 	var out []float64
 	for _, e := range ranked {
 		at := round2(e.Peak)
-		if e.Kind == KindGradual {
+		// For anything that travels or evolves, the peak is often an endpoint —
+		// the moment a moving thing left the frame — and a still taken there
+		// shows nothing at all. The middle is representative.
+		if e.Kind == KindGradual || e.Kind == KindMotion || e.Kind == KindStall {
 			at = round2((e.Start + e.End) / 2)
 		}
 		if seen[at] {

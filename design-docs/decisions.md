@@ -2,6 +2,23 @@
 
 Newest first. Each entry records what changed and what forced it.
 
+## D20 — Sampling a window is a flag, not arithmetic
+
+Both round-3 agents, independently, spent most of their manual iteration
+working out step sizes: "I had to hand-pick 8-11 timestamps per event at
+0.03-0.05s spacing, guessing at reasonable step sizes". An event's start and
+end do not say what a toggle or a drift looks like, and a single still cannot
+show either.
+
+`--during start:end --count N` takes an event's own span back and spaces the
+samples. `next_steps` proposes one for any event with internal cadence, sized
+to about two samples per change so a flicker's tiles land on alternating
+states rather than aliasing onto one.
+
+The same round found the suggested still for a `motion` event was taken at its
+peak, which for something that exits the frame is the moment it left — the tile
+came back blank. Travelling and evolving events are now sampled at their middle.
+
 ## D19 — A backwards step inside movement is named
 
 Movement that reverses once is a class of fault the tool could see and had no

@@ -172,3 +172,65 @@ score stayed at 4 because that video is genuinely the wrong input; what changed
 is that the agent now says the tool "fails loudly and early instead of quietly
 returning garbage", and would recommend running it first on unfamiliar footage
 purely for the suitability gate.
+
+## Round 3
+
+A new scenario the detection rules had never seen — a video player whose
+progress bar advances for the whole recording, with three faults hiding behind
+it — plus the reference clip again, to check nothing had regressed.
+
+### What the changes did
+
+**Every fault in an unseen scenario was found.** The player trial reported all
+three: the backwards jump at 8.0s (straight from `jump_backwards_pixels`), the
+flicker at 13.07s, and the caption shift at 17.0s. It called the docs "unusually
+good at pre-empting misreadings (suitability, limits, stall semantics)".
+
+**`compare` is used, unprompted, for exactly what it is for.** The describe
+trial pixel-verified that the badge was unchanged between 14.0s and 27.9s
+("byte-identical") and that the white flash left no trace ("identical, 0 changed
+pixels"). Round 2's biggest gap became round 3's routine verification step.
+Neither trial reached for an external image tool at any point — "never had to
+leave the tool".
+
+### What round 3 asked for
+
+**Sampling a window, again from both agents independently.** "I had to
+hand-pick 8-11 timestamps per event at 0.03-0.05s spacing, guessing at
+reasonable step sizes… this alone accounted for most of my manual iteration."
+An event's start and end do not say what a toggle or a drift looks like, and a
+single still cannot show either. `--during start:end --count N` now takes an
+event's own span back. See D20.
+
+**A suggested still landed on nothing.** The recommended sheet sampled the
+`motion` event at its peak, which for an object leaving the frame is the moment
+it left, so that tile came back blank — "I had to build a second, hand-cropped
+sheet just to see the object the tool had already detected". Travelling and
+evolving events are now sampled at their middle.
+
+**Threshold sensitivity was silent.** Lowering `--threshold` from 12 to 4 did
+not only add detail: it re-scoped an event, and the agent only noticed by
+diffing two runs. `limits` now says that boundaries depend on the threshold and
+the analysis width, and that two runs are not directly comparable.
+
+**Declined.** A numeric colour readout per region, so a colour ramp is legible
+from JSON alone. It is a reasonable ask, and it edges toward describing content
+rather than change; `--during` plus a crop answers the same question with an
+image, which is the honest form of the answer.
+
+### Scores
+
+| Trial | Round 1 | Round 2 | Round 3 |
+|---|---:|---:|---:|
+| describe | 8/10 | 8/10 | 8/10 |
+| debug | 7/10 | 7/10 | — |
+| player (new scenario) | — | — | 7/10 |
+| footage | 4/10 | 4/10 | — |
+
+Held steady across three rounds while the substance of the complaints moved
+each time: round 1 was about the tool not saying what it knew, round 2 about a
+capability it lacked, round 3 about ergonomics on top of findings it now
+delivers reliably. Both round-3 agents reached a complete, pixel-verified
+account without leaving the tool, and the remaining deductions are about
+sampling ergonomics and about the things it says plainly that it does not do —
+reading text and recognising objects.

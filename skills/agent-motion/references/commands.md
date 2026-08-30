@@ -43,7 +43,8 @@ Writes one PNG of many labelled frames.
 | Flag | Default | Meaning |
 |---|---:|---|
 | `--at` | analysis chooses | Timestamps in seconds, e.g. `--at 3.4,7.1`. |
-| `--count` | 12 | How many frames when the analysis chooses. |
+| `--during` | none | Sample evenly across a window, e.g. `--during 13.07:13.40`. Paste an event's `start_seconds` and `end_seconds`. Not combinable with `--at`. |
+| `--count` | 12 | How many frames, for `--during` or when the analysis chooses. |
 | `--columns` | auto | Grid columns. |
 | `--width` | 320 | Thumbnail width. With `--region`, this magnifies the crop. |
 | `--region` | none | Crop every tile to `x0,y0,x1,y1` in source pixels. Takes an event's `region_xyxy` verbatim. |
@@ -72,7 +73,9 @@ Writes real source frames.
 
 | Flag | Default | Meaning |
 |---|---:|---|
-| `--at` | required | Timestamps in seconds. |
+| `--at` | one of these | Timestamps in seconds. |
+| `--during` | one of these | Sample evenly across a window, e.g. `--during 13.07:13.40`. |
+| `--count` | 6 | How many frames `--during` takes. |
 | `--dir` | `<video>.frames` | Destination directory. |
 | `--width` | source width | Scale frames to this width. With `--region`, this magnifies the crop. |
 | `--region` | none | Crop to `x0,y0,x1,y1` in source pixels. Takes an event's `region_xyxy` verbatim. |
