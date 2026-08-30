@@ -112,7 +112,7 @@ func failureLine(r *engine.CheckResult) string {
 func projectCommand(g *globals) *cobra.Command {
 	var flags analyseFlags
 	var destination string
-	var legend bool
+	var noLegend bool
 	cmd := &cobra.Command{
 		Use:   "project <video>",
 		Short: "Write a spatially aligned activity image, plus the timeline",
@@ -133,7 +133,7 @@ func projectCommand(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			result, err := g.engine().WriteProjection(analysis, destination, legend)
+			result, err := g.engine().WriteProjection(analysis, destination, !noLegend)
 			if err != nil {
 				return err
 			}
@@ -142,6 +142,6 @@ func projectCommand(g *globals) *cobra.Command {
 	}
 	flags.bind(cmd)
 	cmd.Flags().StringVarP(&destination, "output", "o", "", "Destination PNG (default: <video>.temporal.png)")
-	cmd.Flags().BoolVar(&legend, "legend", true, "Append a legend band below the frame explaining the colours")
+	cmd.Flags().BoolVar(&noLegend, "no-legend", false, "Leave off the legend band that explains the colours")
 	return cmd
 }

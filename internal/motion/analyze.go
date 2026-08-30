@@ -131,8 +131,8 @@ func New(width, height int, opt Options) *Analyzer {
 		a.farCells = make([]Cell, opt.GridCols*opt.GridRows)
 		// Two spare slots let drift compare against two references, so a
 		// single anomalous frame cannot masquerade as a slow change.
-		a.lag = opt.DriftFrames
-		a.ringSize = opt.DriftFrames + driftSpare + 1
+		a.lag = boundedLag(opt.DriftFrames, pixels)
+		a.ringSize = a.lag + driftSpare + 1
 		a.ring = make([][]byte, a.ringSize)
 		for i := range a.ring {
 			a.ring[i] = make([]byte, pixels*3)
@@ -229,6 +229,24 @@ func (a *Analyzer) accumulate(f video.Frame, s Sample) {
 	}
 }
 
+// driftBudget bounds the frames held for the slow timescale. The ring is by far
+// the largest allocation: a one-second window on 1920x1080 at 60fps is 373MB of
+// retained frames, which is not a reasonable thing for a CLI to do to a machine
+// without saying so.
+const driftBudget = 192 << 20
+
+// boundedLag shortens the slow window when a full one would not fit in the
+// budget. The caller is told the window it actually got, because a shorter one
+// sees less gradual change and a result that quietly analysed half of what was
+// asked for is worse than one that says it did.
+func boundedLag(want, pixels int) int {
+	frame := pixels * 3
+	if frame <= 0 {
+		return want
+	}
+	return max(2, min(want, driftBudget/frame))
+}
+
 // driftSpare is how much older the second drift reference is. A transient that
 // lasts fewer frames than this cannot appear in both references.
 const driftSpare = 2
@@ -315,6 +333,10 @@ func (a *Analyzer) mark(cells []Cell, p int) {
 
 // Frames is the number of frames folded in.
 func (a *Analyzer) Frames() int { return a.frames }
+
+// DriftFrames is the slow window actually used, which may be shorter than the
+// one requested if a full one would not fit in the memory budget.
+func (a *Analyzer) DriftFrames() int { return a.lag }
 
 // Accumulated is the number of transitions that contributed to the image.
 func (a *Analyzer) Accumulated() int { return a.accumulated }

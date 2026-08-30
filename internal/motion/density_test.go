@@ -44,3 +44,35 @@ func TestDiffuseKindsAreNotJudgedOnDensity(t *testing.T) {
 		}
 	}
 }
+
+// The slow window holds a full frame per frame of lag, which is by far the
+// largest allocation. A full second on a large source would retain hundreds of
+// megabytes, so it is bounded — and the caller is told the window it got.
+func TestSlowWindowIsBoundedByMemory(t *testing.T) {
+	cases := []struct {
+		name       string
+		want       int
+		pixels     int
+		expectFull bool
+	}{
+		{"720p at 30fps", 30, 1280 * 720, true},
+		{"1080p at 60fps", 60, 1920 * 1080, false},
+		{"4K at 30fps", 30, 3840 * 2160, false},
+	}
+	for _, c := range cases {
+		got := boundedLag(c.want, c.pixels)
+		if c.expectFull && got != c.want {
+			t.Errorf("%s: window cut to %d frames when %d fits in the budget", c.name, got, c.want)
+		}
+		if !c.expectFull && got >= c.want {
+			t.Errorf("%s: kept the full %d frames, which is %d MB of retained video",
+				c.name, got, got*c.pixels*3>>20)
+		}
+		if got < 2 {
+			t.Errorf("%s: window of %d frames is too short to compare anything", c.name, got)
+		}
+		if bytes := got * c.pixels * 3; bytes > driftBudget {
+			t.Errorf("%s: %d MB exceeds the %d MB budget", c.name, bytes>>20, driftBudget>>20)
+		}
+	}
+}

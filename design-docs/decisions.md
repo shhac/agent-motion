@@ -24,6 +24,32 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D25 — What a second agent found that the first three did not
+
+The same blind-trial protocol, run through Codex rather than Claude, on the
+content-shift scenario. It reached the same diagnosis — both shifts, both
+displacements, the two non-shift changes correctly separated — and rated the
+tool 7/10. Three findings were new, and two of them were real defects:
+
+**`--no-legend` did not exist.** The flag was `--legend`, defaulting to true, so
+the only way to turn it off was `--legend=false`. `--no-legend` is what anyone
+reaches for first, and it errored. It is now the flag.
+
+**Timestamp precision was never stated.** The tool called its displacements
+"exact" while its timestamps quietly moved from 4.00s to 4.03s when
+`--sample-fps` was halved. Both facts were true; only one was said. `limits` now
+gives the frame-scale accuracy explicitly.
+
+**It could not see any of the images.** Codex has no image reading, so every
+sheet, activity map and diff was inert, and the skill's instruction to open them
+was unusable advice. The text-only path does exist — `timeline` plus `compare`
+gets you exact changed-pixel counts and bounds — and the skill now says so
+rather than assuming a multimodal reader.
+
+The value of asking a different agent was not a different verdict but a
+different set of blind spots: three Claude trials all had image reading and none
+of them noticed the tool assumed it.
+
 ## D24 — Density, not size, separates change from compression noise
 
 A static Wikipedia article, recorded and re-encoded, produced seven events. The

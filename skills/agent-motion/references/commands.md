@@ -65,7 +65,7 @@ source resolution, so it is the slowest command.
 | Flag | Default | Meaning |
 |---|---:|---|
 | `--output`, `-o` | `<video>.temporal.png` | Destination PNG. |
-| `--legend` | on | Append a legend band below the frame. It adds rows underneath and never moves a frame pixel, so `x,y` still maps to the source. |
+| `--no-legend` | off | Leave off the legend band. It is on by default; the band adds rows underneath and never moves a frame pixel, so `x,y` still maps to the source. |
 
 ## `frames <video>`
 

@@ -130,9 +130,14 @@ func limits(p Params, sourceWidth int, sourceFPS float64, fit motion.Assessment)
 		out = append(out, fmt.Sprintf("Analysed at %dpx wide, downscaled from %dpx; features thinner than about %d source pixels may be missed. Use --native for full resolution.",
 			analysisWidth, sourceWidth, int(math.Ceil(float64(sourceWidth)/float64(analysisWidth)))))
 	}
+	if p.SampleFPS > 0 {
+		out = append(out, fmt.Sprintf(
+			"Timestamps are frame-scale, not exact: at %.3g fps every one is accurate to about %.0f ms, and seeking snaps to the nearest frame. Do not read them to more precision than that.",
+			p.SampleFPS, 1000/p.SampleFPS))
+	}
 	if p.SampleFPS < sourceFPS-0.01 {
 		out = append(out, fmt.Sprintf(
-			"Sampled at %.3g fps from a %.3g fps source. Anything repeating faster than %.3g Hz is aliased: a flicker can be reported as a one-off change, or missed. Drop --sample-fps to see every frame.",
+			"Sampled at %.3g fps from a %.3g fps source, so timestamps are coarser than the source allows and anything repeating faster than %.3g Hz is aliased — a flicker can be reported as a one-off change, or missed. Drop --sample-fps to see every frame.",
 			p.SampleFPS, sourceFPS, p.SampleFPS/2))
 	}
 	if p.DriftSeconds <= 0 {

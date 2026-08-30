@@ -212,9 +212,22 @@ legend band. Read that before concluding nothing happened somewhere.
 Use `sheet` when you want to know what something looks like, and `project` when
 you want to know where on screen the action was.
 
+## If you cannot look at images
+
+`sheet`, `project`, `frames` and `compare -o` write PNGs, and this skill assumes
+you can open them. If you cannot, say so rather than guessing at their contents,
+and lean on the text instead: `timeline` describes every event, and `compare`
+answers questions about specific moments numerically — an exact changed-pixel
+count, the box those pixels fall in, and whether two frames are identical. That
+path is weaker, because nothing in it says *what* a region contains, but it is a
+real one and it is honest.
+
 ## Limits worth stating back
 
 - No object recognition, no text reading, no explanation of cause.
+- Timestamps are frame-scale. At 30fps every one is accurate to about 33ms, and
+  seeking snaps to the nearest frame. Do not quote them more precisely, and
+  expect a run at a lower `--sample-fps` to move them.
 - Regions are bounding boxes of change, not object outlines.
 - Analysis is downscaled to `--analysis-width` (320 by default) unless you pass
   `--native`; thin features can be missed.

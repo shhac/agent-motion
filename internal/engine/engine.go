@@ -158,6 +158,11 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 	}
 	spanStart, spanEnd := analyzer.Span()
 
+	// The analyser may have shortened the slow window to fit its memory budget;
+	// report what was actually used, not what was asked for.
+	if used := analyzer.DriftFrames(); used > 0 && opt.SampleFPS > 0 {
+		opt.DriftSeconds = round(float64(used) / opt.SampleFPS)
+	}
 	params := Params{
 		Start: round(spanStart), End: round(spanEnd), FramesAnalysed: analyzer.Frames(),
 		SampleFPS: opt.SampleFPS, Width: width, Height: height,
