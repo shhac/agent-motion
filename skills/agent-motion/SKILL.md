@@ -21,6 +21,10 @@ It is built for **fixed-viewport** recordings — a screen capture, a browser
 session, a visual test, a rendered scene. A handheld or panning camera makes
 every pixel change at once, and the results become much weaker.
 
+`agent-motion inspect <video>` is the cheap first call — dimensions, frame rate,
+duration and codec, with nothing decoded. `agent-motion mcp` serves every
+command over MCP for a client that does not have a shell.
+
 ## Start here
 
 ```sh

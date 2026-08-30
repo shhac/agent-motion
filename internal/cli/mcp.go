@@ -10,14 +10,16 @@ import (
 // called last, once every command is registered, or the generated tool surface
 // is missing whatever was added after it.
 //
-// inspect and timeline are marked read-only: they answer questions and touch
-// nothing. The rest are exposed without that hint because they write an image
-// or a directory of frames. None of them ever modifies the source video.
+// The commands that only answer questions are marked read-only. The rest are
+// exposed without that hint because they write an image or a directory of
+// frames. None of them ever modifies the source video.
 func registerMCP(root *cobra.Command) {
-	readOnly := map[string]bool{"inspect": true, "timeline": true, "usage": true}
+	readOnly := map[string]bool{
+		"inspect": true, "timeline": true, "check": true, "usage": true,
+	}
 	for _, cmd := range root.Commands() {
 		switch cmd.Name() {
-		case "inspect", "timeline", "sheet", "project", "frames", "compare", "usage":
+		case "inspect", "timeline", "check", "sheet", "project", "frames", "compare", "usage":
 			agentmcp.Expose(cmd)
 			if readOnly[cmd.Name()] {
 				agentmcp.ReadOnly(cmd)
