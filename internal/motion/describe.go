@@ -233,11 +233,25 @@ func summarise(e Event, opt TimelineOptions) string {
 
 func wholeFrameSummary(e Event) string {
 	if e.Kind == KindFlash {
-		return fmt.Sprintf("Whole-frame flash at %s lasting about %.0f ms; the picture then returns to what it was.",
-			clock(e.Start), math.Max(1, (e.End-e.Start)*1000))
+		return fmt.Sprintf("Whole-frame flash at %s lasting about %.0f ms; the picture then returns to what it was.%s",
+			clock(e.Start), math.Max(1, (e.End-e.Start)*1000), shading(e))
 	}
-	return fmt.Sprintf("Hard cut at %s: %.0f%% of the frame changes in a single transition and stays changed.",
-		clock(e.Start), e.PeakChanged*100)
+	return fmt.Sprintf("Hard cut at %s: %.0f%% of the frame changes in a single transition and stays changed.%s",
+		clock(e.Start), e.PeakChanged*100, shading(e))
+}
+
+// shading says whether a whole-frame change was the picture changing or only
+// its brightness, which is the difference between a new screen and a scrim over
+// the old one.
+func shading(e Event) string {
+	if e.ShadeResidual == 0 {
+		return ""
+	}
+	if e.Uniform {
+		return fmt.Sprintf(" Every pixel moved through the same brightness map, scaled to %.0f%%, so the content underneath is unchanged — an overlay, a dim, or a theme switch rather than a new screen.",
+			e.ShadeScale*100)
+	}
+	return " The content itself changed, not just its brightness."
 }
 
 // groupSample reduces one transition to what this group of cells saw.

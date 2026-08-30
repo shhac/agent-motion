@@ -49,6 +49,17 @@ type Event struct {
 	// how far it moved as a share of the frame. It is not Chrome's Cumulative
 	// Layout Shift, which is measured from the DOM over a session window.
 	ShiftScore float64 `json:"layout_shift_score,omitempty"`
+	// Uniform marks a whole-frame change where every pixel moved through the
+	// same brightness map — an overlay, a dim, or a theme switch — rather than
+	// the content changing. The picture underneath is still the same picture.
+	Uniform bool `json:"uniform_shade_change,omitempty"`
+	// ShadeResidual is how far the frame strayed from that uniform map, in
+	// luminance units. Small means an overlay; large means new content.
+	ShadeResidual float64 `json:"shade_residual,omitempty"`
+	// ShadeScale is the brightness multiplier that best explains the change.
+	// Around 0.5 on a uniform change means the picture was dimmed to half, the
+	// signature of a modal backdrop.
+	ShadeScale float64 `json:"shade_scale,omitempty"`
 	// Persists reports whether the region still looks different afterwards.
 	// It is nil when there was no checkpoint to compare against.
 	Persists *bool  `json:"persists,omitempty"`

@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/shhac/agent-motion/internal/fixture"
@@ -365,5 +366,39 @@ func TestShiftScoreRanksBySeverity(t *testing.T) {
 	if big.ShiftScore <= small.ShiftScore {
 		t.Errorf("the 40px shift scored %.4f and the 24px shift %.4f; the larger must rank higher",
 			big.ShiftScore, small.ShiftScore)
+	}
+}
+
+// A page whose ticker never stops has not failed to settle. Separating the last
+// real change from the last movement is what answers "has this finished
+// loading", and the player scenario is exactly that shape: a progress bar
+// running to the end, with the last actual change well before it.
+func TestLayoutSettlesBeforeDecorationStops(t *testing.T) {
+	s := fixture.Player()
+	dec := s.Decoder()
+	a := motion.New(320, 180, motion.Options{
+		Threshold: 12, DriftFrames: 30, Checkpoints: 128, ExpectedFrames: s.Frames, IgnoreAbove: 0.5,
+	})
+	opt := motion.TimelineOptions{
+		FPS: s.FPS, SourceWidth: s.Width, SourceHeight: s.Height, DriftSeconds: 1, CutFraction: 0.5,
+	}
+	if err := dec.Decode(context.Background(), video.Request{
+		Path: "player", Width: 320, Height: 180, FPS: s.FPS,
+	}, a.Add); err != nil {
+		t.Fatal(err)
+	}
+	overview := a.Overview(a.Timeline(opt), 40)
+
+	if !overview.StillChanging {
+		t.Error("the progress bar runs to the last frame, so nothing ever fully settles")
+	}
+	if overview.LayoutSettled == nil {
+		t.Fatal("the caption shift at 17s is the last real change and should be reported")
+	}
+	if *overview.LayoutSettled < 16 || *overview.LayoutSettled > 18 {
+		t.Errorf("layout settled at %.2fs, want about 17s", *overview.LayoutSettled)
+	}
+	if !strings.Contains(overview.Narrative, "only animation") {
+		t.Errorf("the narrative should separate the two: %q", overview.Narrative)
 	}
 }

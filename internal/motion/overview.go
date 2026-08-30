@@ -17,7 +17,13 @@ type Overview struct {
 	// recording ended while things were still changing.
 	Settled *float64 `json:"settled_at_seconds,omitempty"`
 	// StillChanging says the recording ran out before anything settled.
-	StillChanging bool         `json:"still_changing_at_end,omitempty"`
+	StillChanging bool `json:"still_changing_at_end,omitempty"`
+	// LayoutSettled is when the last change that moved or replaced content
+	// happened, ignoring anything that merely keeps animating. A ticker
+	// scrolling for six seconds keeps Settled late while the page itself has
+	// been stable throughout, and for "has this finished loading" that is
+	// exactly the wrong answer.
+	LayoutSettled *float64     `json:"layout_settled_at_seconds,omitempty"`
 	Quiet         [][2]float64 `json:"quiet_ranges,omitempty"`
 	BucketSeconds float64      `json:"bucket_seconds,omitempty"`
 	Sparkline     string       `json:"activity_sparkline,omitempty"`
@@ -43,6 +49,7 @@ func (a *Analyzer) Overview(t Timeline, buckets int) Overview {
 		o.Sparkline, o.PeakBucket = sparkline(o.Activity)
 	}
 	o.Settled, o.StillChanging = settledAt(t.Events, end)
+	o.LayoutSettled, _ = settledAt(structural(t.Events), end)
 	o.Narrative = narrate(t, o, start, end)
 	return o
 }
@@ -70,8 +77,14 @@ func narrate(t Timeline, o Overview, start, end float64) string {
 	}
 	fmt.Fprintf(&b, "The busiest moment is %s. ", clock(o.Busiest))
 	switch {
+	case o.StillChanging && o.LayoutSettled != nil:
+		fmt.Fprintf(&b, "Something was still moving when the recording ended, but the last change to the content itself was at %s — after that, only animation. ",
+			clock(*o.LayoutSettled))
 	case o.StillChanging:
 		b.WriteString("It was still changing when the recording ended, so whatever this is had not settled. ")
+	case o.Settled != nil && o.LayoutSettled != nil && *o.LayoutSettled < *o.Settled-minQuiet:
+		fmt.Fprintf(&b, "The content stopped changing at %s; the movement up to %s after that was animation rather than anything new. ",
+			clock(*o.LayoutSettled), clock(*o.Settled))
 	case o.Settled != nil:
 		fmt.Fprintf(&b, "Everything had settled by %s. ", clock(*o.Settled))
 	}
@@ -286,4 +299,22 @@ func settledAt(events []Event, end float64) (*float64, bool) {
 	}
 	value := round2(last)
 	return &value, false
+}
+
+// structural keeps the events that changed what is on the page, dropping the
+// ones that only keep moving.
+//
+// A marquee, a spinner and a video player are all permanently active, and none
+// of them is a page failing to settle. Asked "has this finished loading",
+// answering with the last frame anything moved is the wrong answer to the right
+// question.
+func structural(events []Event) []Event {
+	var out []Event
+	for _, e := range events {
+		switch e.Kind {
+		case KindCut, KindFlash, KindShift, KindStep, KindBlip:
+			out = append(out, e)
+		}
+	}
+	return out
 }

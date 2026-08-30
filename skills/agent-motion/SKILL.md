@@ -138,6 +138,24 @@ If the recording is one the tool cannot judge — a scroll, a pan, ambient motio
 — the result says so in `notes`. A pass on footage like that means nothing, and
 it will tell you.
 
+## Did the page finish loading?
+
+Two fields, and the difference between them matters:
+
+- `settled_at_seconds` — when *anything* last changed.
+- `layout_settled_at_seconds` — when the *content* last changed, ignoring
+  whatever merely keeps animating.
+
+A ticker, a spinner or a video player keeps the first one late forever while the
+page itself has been stable for seconds. For "has this finished loading", read
+the second.
+
+A `cut` also reports `uniform_shade_change`. True means the whole frame changed
+brightness together and the content underneath is unchanged — a modal backdrop
+or a theme switch, not a new screen. `shade_scale` near 0.5 means it was dimmed
+to half. Without this, the most dramatic-looking event in a recording is
+ambiguous and costs a round-trip through full-resolution frames to resolve.
+
 ## Ask whether something is the same as it was
 
 ```sh

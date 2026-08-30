@@ -169,6 +169,14 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 	if frame == nil || fps <= 0 {
 		return events
 	}
+	// Event times are rounded to hundredths for readability, and seeking snaps
+	// to the frame at or after the time asked for. Asking for exactly one frame
+	// either side of a rounded time therefore lands both requests on the same
+	// side of the transition — which reads as "nothing changed" and is the
+	// worst possible answer. Half-frame margins put each request unambiguously
+	// on its own side.
+	const beforeMargin, afterMargin = 1.5, 0.25
+
 	cache := map[float64]image.Image{}
 	at := func(t float64) image.Image {
 		if img, seen := cache[t]; seen {
@@ -181,6 +189,8 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		cache[t] = img
 		return img
 	}
+
+	resolveWholeFrame(events, opt, fps, at, beforeMargin, afterMargin)
 
 	order := brieflyChangedOrder(events)
 	resolved := make([]bool, len(events))
@@ -195,7 +205,7 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		if resolved[i] {
 			continue
 		}
-		before, after := at(events[i].Peak-1/fps), at(events[i].Peak)
+		before, after := at(events[i].Peak-beforeMargin/fps), at(events[i].Peak+afterMargin/fps)
 		if before == nil || after == nil {
 			continue
 		}
@@ -239,6 +249,29 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		kept = append(kept, out[i])
 	}
 	return kept
+}
+
+// resolveWholeFrame asks of every cut and flash whether the picture actually
+// changed or merely changed brightness. Both look the same in the statistics,
+// and it is the most dramatic event in a recording — the one most likely to be
+// read as the headline and most expensive to check by hand.
+func resolveWholeFrame(events []Event, opt TimelineOptions, fps float64, at func(float64) image.Image, beforeMargin, afterMargin float64) {
+	whole := image.Rect(0, 0, opt.SourceWidth, opt.SourceHeight)
+	for i := range events {
+		// Only cuts. A flash returns to what it was, so "did the content change
+		// or only its brightness" has no meaning for one, and its single odd
+		// frame is skipped by the margins anyway.
+		if events[i].Kind != KindCut {
+			continue
+		}
+		before, after := at(events[i].Peak-beforeMargin/fps), at(events[i].Peak+afterMargin/fps)
+		if before == nil || after == nil {
+			continue
+		}
+		residual, scale, uniform := uniformShade(before, after, whole)
+		events[i].ShadeResidual, events[i].ShadeScale, events[i].Uniform = residual, scale, uniform
+		events[i].Summary = wholeFrameSummary(events[i])
+	}
 }
 
 func measureShift(before, after image.Image, region image.Rectangle, opt TimelineOptions) Displacement {

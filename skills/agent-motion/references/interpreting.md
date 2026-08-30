@@ -9,6 +9,8 @@
 | `events` | The described occurrences, in time order. |
 | `quiet_ranges` | Stretches with no detected change. Two ranges meeting at one timestamp are separated by an instantaneous event, not joined. |
 | `busiest_seconds` | Timestamp of the single largest frame-to-frame change. |
+| `settled_at_seconds` | When the last change of any kind finished. Absent when the recording ended mid-change, which `still_changing_at_end` then says. |
+| `layout_settled_at_seconds` | When the last change to the *content* finished, ignoring anything that merely keeps animating. This is the one that answers "has this finished loading" — a ticker or a spinner keeps `settled_at_seconds` late while the page itself has been stable for seconds. |
 | `activity_sparkline` | Shape of frame-to-frame activity, one character per bucket. Least to most active: `_ . : - = + * #`. `gradual` events do not appear in it. |
 | `activity_sparkline_full_scale` | The value a `#` represents. The ramp is square-root scaled, so it is orientation, not measurement. |
 | `motion_coverage` | Fraction of pixels that changed at least once. |
@@ -60,6 +62,23 @@ so it happens in a second pass and is skipped when the recording is unsuitable.
 A `step` where you expected a `shift` usually means the content changed as well
 as moving, or the region was too small or too featureless to register against.
 
+## A whole-frame change: new screen, or overlay?
+
+A `cut` covers the whole frame, and two very different things look identical in
+the numbers: the screen was replaced, or something translucent was put over it.
+`uniform_shade_change` tells them apart by testing whether every pixel moved
+through the same brightness map — which an overlay, a dim and a theme switch all
+do, and new content does not.
+
+| Field | Means |
+|---|---|
+| `uniform_shade_change: true` | The picture underneath is unchanged. A modal backdrop, a dim, a theme switch. |
+| `shade_scale` | The brightness multiplier. About 0.5 means dimmed to half — the signature of a modal backdrop. |
+| `shade_residual` | How far it strayed from that map. Small means an overlay; large means new content. |
+
+Absent means it could not be judged: a blank frame before first paint can be
+mapped onto anything, so the test is refused rather than guessed.
+
 ## What a result does not mean
 
 - **An event is not a thing.** It is a region of pixels that changed together.
@@ -86,6 +105,9 @@ as moving, or the region was too small or too featureless to register against.
   read `omitted_from_image` — cuts, gradual events and stalls are not in the
   picture, and a glance at it alone can suggest nothing happened where plenty
   did.
+- **A narrowed interval can make a page look unsettled.** `still_changing_at_end`
+  means the recording ran out mid-change — and if you set `--end` yourself, you
+  caused that. It describes the interval you asked for, not the recording.
 - **Timestamps are decoder timestamps.** They are stable for one FFmpeg build
   and input, but seeking is keyframe-dependent, so treat them as accurate to
   roughly one frame rather than exact.

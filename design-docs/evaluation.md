@@ -143,6 +143,14 @@ The captures also demonstrated the trap the capture instructions warn about:
 Playwright records variable frame rate, and it had to be transcoded before any
 of this was trustworthy.
 
+### A trial on a real recording
+
+The fourth round put an agent on a real Forbes page load rather than a fixture.
+It answered the ticket correctly and rated the tool 7/10, and its two complaints
+became D26: a modal backdrop that was indistinguishable from a theme change, and
+a settle time that a scrolling ticker rendered meaningless. Its verdict on the
+page — no genuine layout-shift bug, and `check` passing — held up.
+
 ## Agent trials
 
 The tool is for agents, so it is tested by giving agents a video and no context

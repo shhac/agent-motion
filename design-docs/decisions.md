@@ -24,6 +24,44 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D26 — Two whole-frame changes that look identical, and two kinds of settling
+
+A trial on a real Forbes page load, which is the first time an agent had one.
+Two findings, both from the agent having to do work the tool should have done.
+
+**A modal backdrop read as a theme change.** At 3.67s, 95% of the frame changed
+and stayed changed. From the downscaled contact sheet the agent read it as a
+light-to-dark theme flip; it is actually a translucent scrim over an unchanged
+page, and only pulling native-resolution frames by hand revealed that. In the
+statistics the two are identical.
+
+They are separable in the pixels. An overlay, a dim and a theme switch all map
+every pixel through the same brightness function, so the after-frame is a
+straight line in the before-frame; new content is not. Fitting that line and
+measuring the residual costs a few thousand samples. Measured: the Forbes scrim
+fits at residual 1.4 with a scale of 0.50 — dimmed to half — while genuine
+content changes measure 20, 33 and 62.
+
+Two guards were needed, both found by running it. A blank frame before first
+paint maps onto anything, so a fit through a featureless frame is refused rather
+than trusted. And a scene cut between two flat-coloured screens sneaks past the
+residual on a near-degenerate slope, so the brightness multiplier has to be in a
+sane band — a scrim scales the picture, it does not collapse it.
+
+Fixing this exposed a quieter bug: event times are rounded to hundredths, and
+seeking snaps to the frame at or after the time asked for, so requesting exactly
+one frame either side of a rounded time landed **both** requests on the same
+side of the transition. Half-frame margins fix it, and the same bug was silently
+affecting shift measurement.
+
+**A ticker is not a page failing to settle.** `settled_at_seconds` reported the
+last frame anything moved, which on a page with a marquee is the end of the
+recording — while the page itself had been stable for six seconds. For "has this
+finished loading" that is the wrong answer to the right question.
+`layout_settled_at_seconds` reports the last change to the content, ignoring
+what merely keeps animating. On the player scenario nothing ever settles and the
+layout settles at 17.00s, which is the honest pair of answers.
+
 ## D25 — What a second agent found that the first three did not
 
 The same blind-trial protocol, run through Codex rather than Claude, on the
