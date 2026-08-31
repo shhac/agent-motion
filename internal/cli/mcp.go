@@ -15,11 +15,11 @@ import (
 // frames. None of them ever modifies the source video.
 func registerMCP(root *cobra.Command) {
 	readOnly := map[string]bool{
-		"inspect": true, "timeline": true, "check": true, "usage": true,
+		"inspect": true, "timeline": true, "activity": true, "check": true, "usage": true,
 	}
 	for _, cmd := range root.Commands() {
 		switch cmd.Name() {
-		case "inspect", "timeline", "check", "sheet", "project", "frames", "compare", "usage":
+		case "inspect", "timeline", "activity", "check", "sheet", "project", "frames", "compare", "usage":
 			agentmcp.Expose(cmd)
 			if readOnly[cmd.Name()] {
 				agentmcp.ReadOnly(cmd)

@@ -58,6 +58,7 @@ Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
 |---|---|---|
 | `inspect` | none | Dimensions, frame rate, duration, codec. No decoding. |
 | `timeline` | one pass | The described timeline. Start here. |
+| `activity` | one pass | Where change happened, as NDJSON: a grid of busy places. |
 | `sheet` | one pass + stills | One PNG of many labelled real frames. |
 | `project` | one full-res pass | The timeline plus an activity-map PNG. |
 | `frames` | one still each | Real source frames at chosen timestamps, croppable. |
@@ -72,6 +73,7 @@ Every result carries `next_steps` with commands you can run verbatim, and
 
 ```sh
 agent-motion sheet recording.mp4                       # see the whole thing
+agent-motion activity recording.mp4                    # where, not just when
 agent-motion timeline recording.mp4 --start 17 --end 19 --threshold 4
 agent-motion frames recording.mp4 --at 17.62
 

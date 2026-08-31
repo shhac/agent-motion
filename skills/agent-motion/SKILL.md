@@ -50,6 +50,31 @@ one character per bucket, least to most active: `_ . : - = + * #`. Its scale is
 relative to `activity_sparkline_full_scale`, so it is for orientation, not
 measurement, and `gradual` events do not appear in it.
 
+## Where, not just when
+
+```sh
+agent-motion activity recording.mp4
+```
+
+NDJSON, one line per part of the frame that was busy **while the rest of it
+held still**, busiest first. It is the activity map as text: the same spatial
+answer the `project` image gives, for narrowing down without looking at a
+picture.
+
+Each line carries `cell`, `box_xyxy`, `busy_share`, `busy_seconds`, `ranges`
+and `peak_changed_fraction`. Sort or filter on `busy_share`: a cell busy for
+most of the recording is a spinner, a video or an animation; one busy for a
+fiftieth of it is a single change worth a closer look. `box_xyxy` goes
+straight into `--region`.
+
+Stretches where the *whole* frame moved at once are not listed as cells. They
+would light every cell equally and locate nothing, so they are reported once,
+separately, in the `frame_wide` meta line — a page navigation, a cut, or a
+modal backdrop dimming the page. An empty list of cells with a full
+`frame_wide` is a real answer: everything that happened happened everywhere.
+
+An empty list is never "nothing happened". Read `frame_wide`, then `timeline`.
+
 ## Then see it
 
 ```sh

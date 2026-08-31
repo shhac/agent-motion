@@ -24,6 +24,54 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D31 — Where, in text, and only where it means something
+
+The activity map was the tool's only answer to "where", and it was a picture.
+The Codex trial could not read images at all, so for that agent the spatial
+question had no answer beyond the bounding box of whatever events happened to
+be reported. `activity` is that map as NDJSON.
+
+The first cut listed every busy cell and was worse than nothing. A modal
+dimming the page lights all forty-eight of them, at shares between 0.04 and
+0.06, and the list that was supposed to narrow a reader down instead buried the
+dialog among forty-seven rows saying the same thing. The useful question is not
+whether a cell was busy but whether it was busy *while the rest of the frame
+was not*, so frame-wide moments are excluded from the cells and reported once,
+separately, as what they are.
+
+That one change made the output answer the question: the daisyUI recording
+becomes four frame-wide dims plus eight cells covering exactly the centred
+dialog; the player fixture becomes a row of cells tracking the progress bar
+across the frame and four more over the thumbnail that flickers for 0.4s.
+
+Two smaller things came out of building it. A run of one sample is dropped —
+excluding the frame-wide moments leaves a sample of residue at each edge, and
+about twenty cells were being reported as busy for zero seconds. And only the
+frame-to-frame timescale is used: slow drift covers most of a page load, which
+put every cell near the top of a list sorted by how long it was busy.
+
+## D32 — A fraction of a cell was 34/33
+
+Reading the first `activity` output showed peaks above 1. A fraction of a cell
+cannot exceed the cell, so something was counting pixels against the wrong
+area.
+
+The cell bounds ran from `col*Width/Cols`, and the per-pixel assignment
+inverted that as `x*Cols/Width`. That is not its inverse when the frame does
+not divide evenly: at 320x200 on an 8x6 grid the row boundaries fall at 33 and
+66, and `y*6/200` puts y=33 in row 0 while the bounds put it in row 1. A whole
+row of pixels was counted in one cell and charged to another's area.
+
+The partition is now built once, by the same walk that defines the bounds, and
+looked up per pixel — which is also faster than two divisions. The fix is
+guarded by a test that walks every pixel of six frame sizes and checks that the
+cell it lands in is the cell whose bounds contain it, and that the cell areas
+sum to the frame.
+
+It had been there since segmentation was written, and no fixture could have
+caught it: the synthetic scenarios are all 640x360 and 1280x720, which divide
+evenly. It took a real 1280x800 recording and an output that showed the number.
+
 ## D30 — An overlay usually animates, and is usually two things at once
 
 A recording of a daisyUI modal opened and closed twice — the first capture made

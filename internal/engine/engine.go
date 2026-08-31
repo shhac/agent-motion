@@ -82,6 +82,10 @@ type AnalyseOptions struct {
 	Native bool
 	// Series includes the numeric activity buckets alongside the sparkline.
 	Series bool
+	// Cells lists which parts of the frame were busy and when. It is off by
+	// default because it answers a different question from the timeline's, and
+	// because it is the one output that is longer than its subject.
+	Cells bool
 }
 
 // Analysis is the result of one pass: what happened, when, and where.
@@ -92,12 +96,15 @@ type Analysis struct {
 	// Overview is embedded rather than copied field by field: its JSON tags
 	// were already written to be these fields.
 	motion.Overview
-	Suitability motion.Assessment `json:"suitability"`
-	Coverage    float64           `json:"motion_coverage"`
-	Events      []motion.Event    `json:"events"`
-	Omitted     int               `json:"events_omitted,omitempty"`
-	NextSteps   []string          `json:"next_steps,omitempty"`
-	Limits      []string          `json:"limits"`
+	Suitability motion.Assessment     `json:"suitability"`
+	Coverage    float64               `json:"motion_coverage"`
+	Events      []motion.Event        `json:"events"`
+	Omitted     int                   `json:"events_omitted,omitempty"`
+	Cells       []motion.CellActivity `json:"cells,omitempty"`
+	FrameWide   []motion.Span         `json:"frame_wide,omitempty"`
+	Grid        string                `json:"grid,omitempty"`
+	NextSteps   []string              `json:"next_steps,omitempty"`
+	Limits      []string              `json:"limits"`
 
 	// image is what the activity renderer needs, captured here so a finished
 	// result does not keep the whole live accumulator — its drift ring and its
@@ -158,6 +165,14 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 			opt.SampleFPS, e.frameAt(ctx, opt.Path))
 	}
 	overview := analyzer.Overview(timeline, opt.Buckets)
+	var cells []motion.CellActivity
+	var frameWide []motion.Span
+	grid := ""
+	if opt.Cells {
+		cells, frameWide = analyzer.Activity(timelineOptions)
+		g := analyzer.Grid()
+		grid = fmt.Sprintf("%dx%d", g.Cols, g.Rows)
+	}
 	if !opt.Series {
 		overview.Activity = nil
 	}
@@ -182,6 +197,9 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 		Coverage:    round4(analyzer.Coverage()),
 		Events:      timeline.Events,
 		Omitted:     timeline.Truncated,
+		Cells:       cells,
+		FrameWide:   frameWide,
+		Grid:        grid,
 		NextSteps:   nextSteps(opt, overview, timeline),
 		Limits:      limits(params, info.Width, info.FPS, timeline.Fit),
 		image: imageInputs{

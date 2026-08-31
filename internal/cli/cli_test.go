@@ -296,3 +296,33 @@ func TestNonShiftEventsCarryNoDisplacement(t *testing.T) {
 		}
 	}
 }
+
+// A list command defaults to NDJSON, so a long answer can be filtered a line
+// at a time without parsing the whole of it.
+func TestActivityDefaultsToNDJSON(t *testing.T) {
+	root := newRoot("test", fixture.Player().Decoder())
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"activity", "player.mp4"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	out := stdout.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected records and meta lines, got %q", out)
+	}
+	for i, line := range lines {
+		var one map[string]any
+		if err := json.Unmarshal([]byte(line), &one); err != nil {
+			t.Fatalf("line %d is not one JSON object: %v", i, err)
+		}
+	}
+	for _, key := range []string{"frame_wide", "grid", "limits", "suitability"} {
+		if !strings.Contains(out, `"`+key+`"`) {
+			t.Errorf("meta line %q is missing; a caller must not read an empty list as nothing happening", key)
+		}
+	}
+}

@@ -55,6 +55,7 @@ func newRoot(version string, dec video.Decoder) *cobra.Command {
 	root.AddCommand(
 		inspectCommand(g),
 		timelineCommand(g),
+		activityCommand(g),
 		checkCommand(g),
 		projectCommand(g),
 		framesCommand(g),
@@ -68,3 +69,13 @@ func newRoot(version string, dec video.Decoder) *cobra.Command {
 
 // Run executes the CLI.
 func Run(version string) { libcli.Run(newRoot(version, nil)) }
+
+// printList writes a list resource, defaulting to NDJSON so a long answer can
+// be filtered a line at a time without parsing the whole of it.
+func (g *globals) printList(cmd *cobra.Command, items []any, meta map[string]any) error {
+	format, err := output.ResolveFormat(g.Format, output.FormatNDJSON)
+	if err != nil {
+		return err
+	}
+	return output.WriteList(cmd.OutOrStdout(), format, items, meta, output.PruneNils)
+}

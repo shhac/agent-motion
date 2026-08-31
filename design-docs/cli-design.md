@@ -5,6 +5,7 @@
 ```text
 agent-motion inspect  <video>
 agent-motion timeline <video> [analysis flags]
+agent-motion activity <video> [analysis flags]
 agent-motion sheet    <video> [--at ...] [--count N] [--columns N] [--width N]
                               [--region x0,y0,x1,y1] [--pad N] [--quick] [-o path]
 agent-motion project  <video> [analysis flags] [-o path] [--legend]
@@ -19,7 +20,8 @@ agent-motion mcp   [--http addr]
 agent-motion usage
 ```
 
-Analysis flags shared by `timeline`, `project` and a self-choosing `sheet`:
+Analysis flags shared by `timeline`, `activity`, `project` and a self-choosing
+`sheet`:
 `--start --end --threshold --drift --analysis-width --native --sample-fps
 --max-events --buckets --series`.
 

@@ -36,6 +36,34 @@ The main command. Decodes the interval once and describes it.
 agent-motion timeline recording.mp4 --start 12 --end 18 --threshold 6
 ```
 
+## `activity <video>`
+
+The spatial index: where change happened, rather than what it was. NDJSON by
+default, one object per line, busiest first. Takes the shared analysis flags.
+
+```sh
+agent-motion activity recording.mp4
+agent-motion activity recording.mp4 --format json    # envelope instead
+```
+
+| Field | Meaning |
+| --- | --- |
+| `cell` | `r<row>c<col>` in the grid named by the `grid` meta line. |
+| `box_xyxy` | The cell in source pixels. Goes straight into `--region`. |
+| `busy_share` | Share of the analysed interval this cell was busy for. The field to sort and filter on. |
+| `busy_seconds` | The same, in seconds. |
+| `ranges` | The busy stretches, `[start, end]`, in order. Capped at twelve, with `ranges_omitted` for the rest. |
+| `peak_changed_fraction` | The most of this cell that changed in one step, 0..1. |
+| `peak_seconds` | When that was. |
+
+Meta lines follow the records: `frame_wide` (stretches where the whole frame
+moved at once, which locate nothing and so are not listed as cells), `grid`,
+`noise_floor_fraction`, `suitability` and `limits`.
+
+Only activity **local** to a cell is listed. An empty list does not mean
+nothing happened — it means nothing happened in one place while the rest of the
+frame held still. Read `frame_wide`, then `timeline`.
+
 ## `sheet <video>`
 
 Writes one PNG of many labelled frames.

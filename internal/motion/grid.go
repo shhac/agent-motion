@@ -38,7 +38,18 @@ type Grid struct {
 	// Pixels is the pixel count of each cell, which differs at the right and
 	// bottom edges when the frame does not divide evenly.
 	Pixels []int
+
+	// colOf and rowOf map a coordinate to its cell. They are built from the
+	// same walk as Bounds rather than by inverting it: the obvious inverse,
+	// x*Cols/Width, is not the inverse of Bounds' col*Width/Cols when the
+	// frame does not divide evenly, and the disagreement put a whole row of
+	// pixels in the neighbouring cell's count while Pixels kept the honest
+	// area — a fraction of 34/33, which is not a fraction.
+	colOf, rowOf []int32
 }
+
+// Cell returns the index of the cell containing an analysis-space coordinate.
+func (g Grid) Cell(x, y int) int { return int(g.rowOf[y])*g.Cols + int(g.colOf[x]) }
 
 // Bounds returns the analysis-coordinate rectangle of cell index i.
 func (g Grid) Bounds(i int) image.Rectangle {
@@ -78,7 +89,21 @@ func newGrid(cols, rows, width, height int) Grid {
 			break
 		}
 	}
-	g := Grid{Cols: cols, Rows: rows, Width: width, Height: height, Pixels: make([]int, cols*rows)}
+	g := Grid{
+		Cols: cols, Rows: rows, Width: width, Height: height,
+		Pixels: make([]int, cols*rows),
+		colOf:  make([]int32, width), rowOf: make([]int32, height),
+	}
+	for col := range cols {
+		for x := col * width / cols; x < (col+1)*width/cols; x++ {
+			g.colOf[x] = int32(col)
+		}
+	}
+	for row := range rows {
+		for y := row * height / rows; y < (row+1)*height/rows; y++ {
+			g.rowOf[y] = int32(row)
+		}
+	}
 	for i := range g.Pixels {
 		b := g.Bounds(i)
 		g.Pixels[i] = max(1, b.Dx()*b.Dy())

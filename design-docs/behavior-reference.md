@@ -192,6 +192,36 @@ never drops below two pixels, so a cell of two pixels or fewer can never be
 reported as active, and a small analysis width silently returned nothing at
 all. The grid is coarsened until every cell holds at least twelve pixels.
 
+## The spatial index
+
+`activity` reports the same grid the segmenter uses, as text, because the
+activity image is the only answer to "where" the tool had and not every agent
+can look at one.
+
+A cell is listed for the stretches it was busy while the frame as a whole was
+not. Busy-everywhere moments are excluded and reported once as `frame_wide`:
+they light every cell equally, so listing them per cell buries the reader in
+forty-eight identical rows and locates nothing. The frame counts as moving as a
+whole at the same share, `frameWideArea`, used elsewhere to tell an overlay
+from a change in one place.
+
+Taking those moments out leaves a sample of residue at each edge of them, so a
+run of a single sample is dropped: a cell described as busy for zero seconds is
+worse than no line at all.
+
+Only the frame-to-frame timescale is used. Slow drift covers long stretches of
+almost everything during a page load, which would put every cell near the top
+of a list sorted by how long it was busy; `gradual` events are the timeline's
+way of reporting it.
+
+## Grid partition
+
+A pixel's cell and the cell whose area that pixel is counted against must be
+the same cell, or a "fraction" of a cell can exceed one — which it did, at
+34/33. The obvious inverse of the cell bounds, `x*Cols/Width`, is not their
+inverse when the frame does not divide evenly by the grid. The partition is
+built once, by the same walk that defines the bounds, and looked up per pixel.
+
 ## Suitability
 
 Every analysis reports whether the recording is the kind the tool works on,

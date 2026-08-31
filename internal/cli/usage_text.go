@@ -10,6 +10,7 @@ WHAT IT IS FOR
 COMMANDS
   inspect <video>    Dimensions, frame rate, duration, codec. Decodes nothing.
   timeline <video>   What changes and when: narrative, events, quiet stretches.
+  activity <video>   Where it changes: a grid of busy places, as NDJSON.
   check <video>      Assert conditions and exit non-zero if they fail.
   sheet <video>      One image of many labelled frames. Shows what it looks like.
   project <video>    Timeline plus an activity-map PNG in source coordinates.
@@ -30,6 +31,19 @@ WATCHING ONE EVENT UNFOLD
   An event's start and end do not say what a toggle or a drift looks like.
   Paste the event's own span back in and the samples are spaced for you.
   --during works on frames too.
+
+WHERE, NOT JUST WHEN
+  agent-motion activity clip.mp4
+  The activity map in text, for narrowing down without looking at a picture.
+  One line per part of the frame that was busy while the rest of it held
+  still, busiest first, with the stretches it was busy for. Stretches where
+  the whole frame moved at once are reported separately as frame_wide: they
+  locate nothing, and would otherwise light every cell equally.
+
+  Sort or filter on busy_share. A cell busy for most of the recording is a
+  spinner, a video or an animation; one busy for a fiftieth of it is a single
+  change worth a closer look. Pass a box straight to --region:
+  agent-motion sheet clip.mp4 --region 480,664,800,800
 
 CONTENT SHIFT
   A 'shift' is content that moved rather than content that appeared, which on

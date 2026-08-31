@@ -145,3 +145,50 @@ func projectCommand(g *globals) *cobra.Command {
 	cmd.Flags().BoolVar(&noLegend, "no-legend", false, "Leave off the legend band that explains the colours")
 	return cmd
 }
+
+func activityCommand(g *globals) *cobra.Command {
+	var flags analyseFlags
+	cmd := &cobra.Command{
+		Use:   "activity <video>",
+		Short: "List which parts of the frame were busy, and when",
+		Long: "Activity is the timeline's spatial counterpart, and the one part of the\n" +
+			"activity map that is readable without looking at it. It divides the frame\n" +
+			"into a coarse grid and reports every stretch in which a cell was above its\n" +
+			"own noise floor, busiest first, one JSON object per line.\n\n" +
+			"Use it to narrow down: to find which region to pass to 'sheet --region',\n" +
+			"to tell one busy corner from a whole page moving, or to confirm that a\n" +
+			"part of the frame you expected to be still was. The cells are coarse on\n" +
+			"purpose; the events in 'timeline' carry the exact regions.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.validate(); err != nil {
+				return err
+			}
+			opt := flags.options(args[0])
+			opt.Cells = true
+			result, err := g.engine().Analyse(cmd.Context(), opt)
+			if err != nil {
+				return err
+			}
+			items := make([]any, len(result.Cells))
+			for i, c := range result.Cells {
+				items[i] = c
+			}
+			meta := map[string]any{
+				"input":                result.Input,
+				"grid":                 result.Grid,
+				"suitability":          result.Suitability,
+				"noise_floor_fraction": result.Params.NoiseFloor,
+				"frame_wide":           result.FrameWide,
+				"limits": append([]string{
+					"A cell is a coarse box, not a shape: a small movement anywhere inside one lights the whole cell.",
+					"Only activity local to a cell is listed. An empty list does not mean nothing happened: it means nothing happened in one place while the rest of the frame held still. Read frame_wide for the stretches in which the whole frame moved at once, and 'timeline' for what they were.",
+					"A cell is absent when it stayed below its own noise floor, which is not the same as nothing changing there.",
+				}, result.Limits...),
+			}
+			return g.printList(cmd, items, meta)
+		},
+	}
+	flags.bind(cmd)
+	return cmd
+}
