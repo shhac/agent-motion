@@ -6,9 +6,10 @@ here was measured, not invented.
 
 ## A modal opening vs a theme switching
 
-Both change almost the whole frame at once. Both fit a brightness map over 88%
-of it. They mean opposite things, and the sign of `shade_scale` is what
-separates them.
+Both change almost the whole frame at once, and both fit a brightness map over
+88% of it. Both are therefore "not a new screen" — but one has something laid
+over the page and the other is the page itself re-coloured. The sign of
+`shade_scale` is what separates them.
 
 A modal backdrop dimming a page:
 
@@ -21,22 +22,24 @@ A dark-to-light theme toggle on the same site:
 
 ```json
 "kind": "cut", "start_seconds": 5.10, "peak_changed_fraction": 0.9193,
-"shade_fit": 0.88, "shade_scale": -0.93
+"uniform_shade_change": true, "shade_fit": 0.88, "shade_scale": -0.93
 ```
 
-`uniform_shade_change: true` means the picture underneath is unchanged and only
-its brightness moved — something translucent laid over it. `shade_scale` 0.54
-is the dim: everything went to about half brightness. The remaining 12% that
-did not follow the map is the dialog that appeared on top.
+Both are marked `uniform_shade_change: true`, which means the picture
+underneath is recoverable — this was not a new screen. **The sign of
+`shade_scale` is what separates them.**
 
-The theme switch is **not** an overlay, and the tool does not mark it as one.
-But read `shade_scale`: **−0.93 is an inversion**. A theme flip exchanges light
-and dark, so background goes up while text goes down, and the best-fitting line
-has a slope near −1. A high `shade_fit` with a *negative* `shade_scale` is the
-signature of the same content re-coloured, not of new content.
+Positive is something translucent laid over the page. 0.54 is the dim:
+everything went to about half brightness, and the remaining 12% that did not
+follow the map is the dialog that appeared on top.
 
-Do not conclude "the content changed" from the absence of
-`uniform_shade_change` alone. Check the sign first.
+Negative is the page itself re-coloured. −0.93 is an inversion: a theme flip
+exchanges light and dark, so the background goes up while the text goes down,
+and the best-fitting line has a slope near −1. Nothing was laid over anything —
+there is no "remaining 12%" to explain, because nothing is on top.
+
+The summaries say which: *"scaled to 54%, ... something translucent laid over
+it"* against *"inverted, ... the same content with light and dark exchanged"*.
 
 ## A shift the tool can measure, and one it cannot
 

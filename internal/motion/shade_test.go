@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +147,54 @@ func TestAMapThatChangesNothingIsNotAnOverlay(t *testing.T) {
 	fit, scale, uniform := uniformShade(before, after, image.Rect(0, 0, 320, 200))
 	if uniform {
 		t.Errorf("a content change was called an overlay: fit %.2f scale %.2f", fit, scale)
+	}
+}
+
+// inverted is a theme switch: light and dark exchanged, structure kept.
+func inverted(src *image.RGBA) *image.RGBA {
+	out := image.NewRGBA(src.Bounds())
+	for y := src.Rect.Min.Y; y < src.Rect.Max.Y; y++ {
+		for x := src.Rect.Min.X; x < src.Rect.Max.X; x++ {
+			r, g, b, a := src.At(x, y).RGBA()
+			out.Set(x, y, color.RGBA{
+				R: 255 - uint8(r>>8), G: 255 - uint8(g>>8), B: 255 - uint8(b>>8), A: uint8(a >> 8),
+			})
+		}
+	}
+	return out
+}
+
+// A theme switch is the same content re-coloured, and the map that describes it
+// is a line of slope near -1. Rejecting it for its sign meant the tool reported
+// a re-coloured page as a new screen — the one confusion this test exists to
+// remove. Measured on a real dark-to-light toggle: 88% of the frame fits, at
+// -0.93, the same share a modal backdrop manages at +0.54.
+func TestAnInvertedMapIsTheSameContent(t *testing.T) {
+	before := textured(7)
+	fit, scale, uniform := uniformShade(before, inverted(before), before.Bounds())
+	if !uniform {
+		t.Errorf("an exact inversion read as new content (fit %.2f, scale %.2f)", fit, scale)
+	}
+	if scale >= 0 {
+		t.Errorf("scale = %.2f, want negative: an inversion is what distinguishes a theme switch from a scrim", scale)
+	}
+	if fit < minShadeFit {
+		t.Errorf("fit = %.2f, want at least %.2f", fit, minShadeFit)
+	}
+}
+
+// The sign is the whole difference between the two sentences the tool writes,
+// so it has to survive into the event.
+func TestInversionAndScrimAreDescribedDifferently(t *testing.T) {
+	scrim := Event{Kind: KindCut, Uniform: true, ShadeFit: 0.88, ShadeScale: 0.54}
+	flip := Event{Kind: KindCut, Uniform: true, ShadeFit: 0.88, ShadeScale: -0.93}
+	if got := shading(scrim); !strings.Contains(got, "laid over") {
+		t.Errorf("a scrim is described as %q", got)
+	}
+	if got := shading(flip); !strings.Contains(got, "inverted") {
+		t.Errorf("an inversion is described as %q", got)
+	}
+	if strings.Contains(shading(flip), "new content on top") {
+		t.Error("an inversion has nothing on top of it; that sentence belongs to a dialog over a dimmed page")
 	}
 }

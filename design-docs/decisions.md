@@ -24,21 +24,39 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
-## D36 — A theme switch is not an overlay, and the tool said it was
+## D36 — A theme switch inverts, and the sign was being thrown away
 
 D26 introduced the brightness-map test and described it as separating "an
-overlay, a dim and a theme switch" from new content. The theme switch was
-wrong, and the sentence had propagated into the event summaries the tool
-prints, the usage text, the skill and two code comments.
+overlay, a dim and a theme switch" from new content. Testing it against a real
+dark-to-light toggle took two passes to get right, and the first was wrong.
 
-A recording of a real dark-to-light toggle settles it. Dark to light moves the
-background up and the text down; no single line fits both directions, so 88% of
-the frame followed the best map — below the bar — and the verdict was that the
-content changed. That is the right answer, and the documentation was telling a
-reader to expect the opposite.
+The first reading was that a theme switch simply is not one of these: it moves
+background up and text down, and 88% of the frame followed the best-fitting map
+— below the bar — so the verdict was "the content changed". The documentation
+was corrected to say so, in the summaries, the usage text, the skill and two
+code comments.
 
-The detector was never wrong. Only the description of what it detects was, in
-the one place a reader would most trust it: the summary attached to the event.
+That was the wrong lesson. The fit was not poor; it was *inverted*. The slope
+was -0.93, and the guard band ran from +0.25 to +3.0, so a near-perfect
+inversion was rejected for its sign and the measurement discarded. 88% at -0.93
+is the same share a modal backdrop manages at +0.54: exactly as good a fit,
+describing a different transformation.
+
+So D26's original claim was right and its implementation was not. The band is
+now on the magnitude, and `shade_scale` carries the sign as the finding —
+positive is something translucent laid over the page, negative is the page
+itself re-coloured. The two get different sentences, because an inversion has
+nothing on top of it and a scrim usually does.
+
+Every genuine content change across fourteen real recordings is still rejected:
+an accordion at 1.00 (a map that does nothing), a menu opening without a scrim
+at 0.93, a real Forbes change at 0.98, two page loads whose fit never reaches
+the bar.
+
+The thing worth keeping from this: the detector was measuring the right
+quantity the whole time, and a guard written from an assumption about what that
+quantity could be was throwing the answer away. Widening a threshold is
+sometimes the fix, but only after a recording shows what falls outside it.
 
 ## D33 — A layout shift usually animates too
 

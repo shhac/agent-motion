@@ -27,9 +27,16 @@ const (
 	// structure to hold the line down.
 	minShadeVariation = 8.0
 	// A scrim scales brightness; it does not collapse the picture to a single
-	// value or invert it. Outside this band the "fit" is a degenerate one
-	// through a nearly uniform frame, which is how a scene cut between two
-	// flat-coloured screens sneaks past the residual.
+	// value. Outside this band the "fit" is a degenerate one through a nearly
+	// uniform frame, which is how a scene cut between two flat-coloured
+	// screens sneaks past the residual.
+	//
+	// The band is on the magnitude, because the map may invert. A dark-to-light
+	// theme switch moves the background up and the text down, which is a line
+	// of slope near -1, and it fits one over 88% of a real frame — the same
+	// share a modal backdrop manages. Rejecting that for its sign meant
+	// reporting a re-coloured page as a new screen, which is precisely the
+	// confusion this test exists to remove.
 	minShadeScale = 0.25
 	maxShadeScale = 3.0
 )
@@ -93,8 +100,9 @@ func uniformShade(before, after image.Image, region image.Rectangle) (fit, scale
 		}
 	}
 	share := float64(fitted) / float64(len(xs))
+	magnitude := math.Abs(slope)
 	uniform = share >= minShadeFit &&
-		slope >= minShadeScale && slope <= maxShadeScale &&
+		magnitude >= minShadeScale && magnitude <= maxShadeScale &&
 		math.Abs(slope-1) >= minShadeStrength
 	return round2(share), round2(slope), uniform
 }

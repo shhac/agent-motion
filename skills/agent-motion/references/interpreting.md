@@ -71,19 +71,20 @@ as moving, or the region was too small or too featureless to register against.
 A `cut` covers the whole frame, and two very different things look identical in
 the numbers: the screen was replaced, or something translucent was put over it.
 `uniform_shade_change` tells them apart by testing whether every pixel moved
-through the same brightness map — which something translucent laid over
-unchanged content does, and new content does not.
+through the same brightness map — which a re-shading of the same picture does,
+and new content does not.
 
-A theme switch is *not* one of these, though it looks like it should be. Dark to
-light moves the background up and the text down, and no single map fits both
-directions, so a theme change correctly reads as the content changing rather
-than as an overlay. Measured on a real dark-to-light toggle: 88% of the frame
-followed a map, below the bar, and the verdict was content.
+The map can **invert** as well as scale, and the sign of `shade_scale` is what
+separates the two things that pass this test. Positive is something translucent
+laid over the page. Negative is the page itself re-coloured: a dark-to-light
+theme switch exchanges background and text, fitting a line of slope near −1.
+Measured on a real toggle, 88% of the frame followed that map — the same share
+a modal backdrop manages at +0.54.
 
 | Field | Means |
 |---|---|
-| `uniform_shade_change: true` | The picture underneath is unchanged, only its brightness. A modal backdrop or a dim. Absent or false does not mean "no overlay" — a menu that opens without dimming the page behind it is new content, and reads as one. |
-| `shade_scale` | The brightness multiplier. About 0.5 means dimmed to half — the signature of a modal backdrop. |
+| `uniform_shade_change: true` | The picture underneath is recoverable — only its brightness changed. Read `shade_scale` to see which kind. Absent or false does not mean "no overlay": a menu that opens without dimming the page behind it is new content, and reads as one. |
+| `shade_scale` | The brightness multiplier, and its **sign is the finding**. About 0.5 means dimmed to half — a modal backdrop. Near −1 means inverted — the same content with light and dark exchanged, which is a theme switch. |
 | `shade_fit` | The share of the frame that followed that map. A modal dims most of the frame and puts a dialog on the rest, so this says more than an average could: 0.85 means 85% dimmed and 15% is new content on top. |
 
 Absent means it could not be judged: a blank frame before first paint can be

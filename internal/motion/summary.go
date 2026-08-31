@@ -81,22 +81,31 @@ func wholeFrameSummary(e Event) string {
 }
 
 // shading says whether a whole-frame change was the picture changing or only
-// its brightness, which is the difference between a new screen and a scrim over
-// the old one.
+// its brightness, which is the difference between a new screen and the same
+// screen re-shaded.
+//
+// The map can invert as well as scale, and the two want different sentences: a
+// scrim is something laid over the content, an inversion is the content itself
+// re-coloured. Both leave the picture underneath recoverable, which is the
+// question being answered; only one of them has anything on top.
 func shading(e Event) string {
 	if e.ShadeFit == 0 {
 		return ""
 	}
-	if e.Uniform {
-		rest := ""
-		if e.ShadeFit < 0.97 {
-			rest = fmt.Sprintf(" The remaining %.0f%% is new content on top of it, which is what a dialog over a dimmed page looks like.",
-				(1-e.ShadeFit)*100)
-		}
-		return fmt.Sprintf(" %.0f%% of the frame moved through the same brightness map, scaled to %.0f%%, so what is underneath is unchanged — something translucent laid over it rather than a new screen.%s",
-			e.ShadeFit*100, e.ShadeScale*100, rest)
+	if !e.Uniform {
+		return fmt.Sprintf(" Only %.0f%% of it follows a single brightness map, so the content itself changed rather than just its brightness.", e.ShadeFit*100)
 	}
-	return fmt.Sprintf(" Only %.0f%% of it follows a single brightness map, so the content itself changed rather than just its brightness.", e.ShadeFit*100)
+	if e.ShadeScale < 0 {
+		return fmt.Sprintf(" %.0f%% of the frame moved through the same brightness map, inverted, so what is underneath is the same content with light and dark exchanged rather than a new screen.",
+			e.ShadeFit*100)
+	}
+	rest := ""
+	if e.ShadeFit < 0.97 {
+		rest = fmt.Sprintf(" The remaining %.0f%% is new content on top of it, which is what a dialog over a dimmed page looks like.",
+			(1-e.ShadeFit)*100)
+	}
+	return fmt.Sprintf(" %.0f%% of the frame moved through the same brightness map, scaled to %.0f%%, so what is underneath is unchanged — something translucent laid over it rather than a new screen.%s",
+		e.ShadeFit*100, e.ShadeScale*100, rest)
 }
 
 func compass(dx, dy float64) string {

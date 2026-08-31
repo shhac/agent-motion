@@ -53,9 +53,10 @@ type Event struct {
 	// same brightness map — an overlay or a dim — rather than the content
 	// changing. The picture underneath is still the same picture.
 	//
-	// A theme switch is not one of these, though it looks like it should be:
-	// it moves background and text in opposite directions, which no single map
-	// fits, so it reads as content changing. That is the right answer.
+	// The map may invert as well as scale: a theme switch exchanges light and
+	// dark, fitting a line of slope near -1. That is still the same content
+	// underneath, so it is still marked here — read the sign of ShadeScale to
+	// tell a scrim laid over the page from the page itself re-coloured.
 	Uniform bool `json:"uniform_shade_change,omitempty"`
 	// ShadeResidual is how far the frame strayed from that uniform map, in
 	// luminance units. Small means an overlay; large means new content.
