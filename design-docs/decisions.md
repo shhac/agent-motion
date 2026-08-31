@@ -24,6 +24,43 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D37 — A modal closing is still read as the content changing
+
+A test-coverage sweep found that no fixture ever drove the brightness-map test
+through the pipeline: `shade_test.go` only called it on hand-built image pairs,
+so the code deciding which events are offered to it at all was untested. The
+`overlay` fixture closes that — a page dimming behind a dialog and coming back.
+
+It immediately showed a defect. The opening is identified correctly, at a scale
+of 0.50. The closing is not, and comes back as the content changing. The
+transition is a dimmed page plus a light dialog returning to a plain page, and
+a white dialog pixel and a dimmed background pixel can land on the same value
+once the dim lifts — so the pair between them has slope zero. At this dialog
+size about a third of the sampled pairs are mixed, enough to carry the median
+onto zero, and the fit is then rejected for falling outside the scale band. The
+same modal therefore reads as an overlay opening and as new content closing.
+
+The obvious fix was tried and rejected. Choosing the line that maximises the
+share of pixels following it, rather than estimating a slope, cannot be dragged
+by any minority and fixed the fixture exactly — 0.50 opening, 2.01 closing. It
+also fitted a real recording's *undimmed* dropdown at a scale of 0.25 and
+called it an overlay, because a page whose tones cluster can have almost any
+line drawn through it by moving the intercept. A guard requiring the followed
+pixels to span a brightness range did not catch it either.
+
+Trading a synthetic false negative for a real false positive is a bad trade, so
+the estimator is unchanged and the limitation is recorded in a skipped test
+naming what to unskip. The fixture is kept regardless: it is the only thing in
+the suite that exercises this path end to end, and it found this in its first
+run.
+
+Also worth recording: the recording's own sidecar said the menu "opens at
+roughly 8-9 seconds and is visible through the end". The frames show it already
+open at 9.00 and closed by 9.40, with the page scrolled. Two sidecars have now
+turned out looser than the measurement, which is a reason to pull frames before
+trusting a description of what a recording contains — including one written by
+whoever made it.
+
 ## D36 — A theme switch inverts, and the sign was being thrown away
 
 D26 introduced the brightness-map test and described it as separating "an
