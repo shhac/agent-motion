@@ -24,6 +24,38 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D30 — An overlay usually animates, and is usually two things at once
+
+A recording of a daisyUI modal opened and closed twice — the first capture made
+specifically to exercise the overlay test — found two ways it was too narrow.
+
+**It only looked at cuts.** A modal backdrop fades in over about a third of a
+second, which is a run of transitions rather than the single one a cut is, so
+the commonest overlay there is went untested. Whole-frame stretches of activity
+are now tested too, sampled clear of both ends: an event's bounds are where
+activity crossed the noise floor, and a fade is still moving there.
+
+**A mean residual could not see it.** A modal is two populations at once: most
+of the frame dimmed, and a dialog that appeared. Least squares has no defence
+against that. The dialog is a tight cluster at one end of the range and drags
+the line into a compromise fitting neither — badly enough, in the closing
+direction where the dimmed page's tonal range is compressed, to hide the dim
+completely and report a *darkening* on a transition that brightened.
+
+Two changes fixed it. The measure became the *share* of the frame that follows
+the map rather than the average distance from it, so "85% dimmed, 15% new
+content" is expressible. And the fit became the median slope over many pairs of
+points instead of least squares, which is unmoved by a minority however extreme
+— taken at fixed strides so the result stays deterministic.
+
+A third guard came out of it: trimming outliers lets any two frames sharing a
+lot of unchanged background fit a line of slope one, which says only that most
+pixels stayed the same. A brightness map that does nothing is not an overlay.
+
+Measured after: all four modal transitions are identified, dimming to 0.54 and
+brightening by 1.69, and every genuine content change across four real
+recordings is still rejected.
+
 ## D29 — A marquee is not a layout shift
 
 Eight real screen recordings of ad-supported news pages, captured properly:

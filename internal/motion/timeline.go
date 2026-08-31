@@ -55,7 +55,10 @@ type Event struct {
 	Uniform bool `json:"uniform_shade_change,omitempty"`
 	// ShadeResidual is how far the frame strayed from that uniform map, in
 	// luminance units. Small means an overlay; large means new content.
-	ShadeResidual float64 `json:"shade_residual,omitempty"`
+	// ShadeFit is the share of the frame that followed that brightness map. A
+	// modal dims most of the frame and puts a dialog on the rest, so this says
+	// more than an average distance can.
+	ShadeFit float64 `json:"shade_fit,omitempty"`
 	// ShadeScale is the brightness multiplier that best explains the change.
 	// Around 0.5 on a uniform change means the picture was dimmed to half, the
 	// signature of a modal backdrop.

@@ -3,6 +3,7 @@ package motion
 import (
 	"image"
 	"math"
+	"sort"
 )
 
 // The bounds separating an overlay from a new picture, calibrated in
@@ -10,7 +11,17 @@ import (
 // translucent scrim over a news page fits at residual 1.4, while genuine
 // content changes measure 20, 33 and 62.
 const (
-	maxShadeResidual = 8.0
+	// A pixel within this many luminance units of the fitted line counts as
+	// following it.
+	shadeTolerance = 12.0
+	// minShadeFit is the share of the frame that must follow the line.
+	minShadeFit = 0.75
+	// minShadeStrength is how far the brightness map must be from doing
+	// nothing. Trimming outliers lets any two frames sharing a lot of unchanged
+	// background fit a line of slope one — which says only that most pixels
+	// stayed the same, not that the picture was dimmed. An overlay actually
+	// changes the brightness.
+	minShadeStrength = 0.12
 	// A flat starting frame — a blank white page before first paint — can be
 	// mapped onto anything, so the fit means nothing. Real content has
 	// structure to hold the line down.
@@ -40,7 +51,7 @@ const shadeSamples = 20000
 // same function, so the after-frame is a straight line in the before-frame. New
 // content is not. Fitting that line and measuring what is left over separates
 // them for the cost of a few thousand samples.
-func uniformShade(before, after image.Image, region image.Rectangle) (residual, scale float64, uniform bool) {
+func uniformShade(before, after image.Image, region image.Rectangle) (fit, scale float64, uniform bool) {
 	region = region.Intersect(before.Bounds()).Intersect(after.Bounds())
 	if region.Dx() < 8 || region.Dy() < 8 {
 		return 0, 0, false
@@ -50,37 +61,94 @@ func uniformShade(before, after image.Image, region image.Rectangle) (residual, 
 		stride = int(math.Sqrt(float64(total) / shadeSamples))
 	}
 
-	var n, sumX, sumY, sumXY, sumXX float64
+	xs := make([]float64, 0, shadeSamples)
+	ys := make([]float64, 0, shadeSamples)
 	for y := region.Min.Y; y < region.Max.Y; y += stride {
 		for x := region.Min.X; x < region.Max.X; x += stride {
-			bx, ay := luma(before, x, y), luma(after, x, y)
-			n++
-			sumX += bx
-			sumY += ay
-			sumXY += bx * ay
-			sumXX += bx * bx
+			xs = append(xs, luma(before, x, y))
+			ys = append(ys, luma(after, x, y))
 		}
 	}
-	denominator := n*sumXX - sumX*sumX
-	if n < 64 || denominator == 0 {
+	if len(xs) < 64 {
 		return 0, 0, false
 	}
-	// The spread of the starting frame. Without it the line is fitted through a
-	// flat surface and will match anything.
-	spread := math.Sqrt(math.Max(0, sumXX/n-(sumX/n)*(sumX/n)))
-	slope := (n*sumXY - sumX*sumY) / denominator
-	intercept := (sumY - slope*sumX) / n
+	if spread(xs) < minShadeVariation {
+		// A blank page maps onto anything, so the fit would mean nothing.
+		return 0, 0, false
+	}
 
-	var total float64
-	for y := region.Min.Y; y < region.Max.Y; y += stride {
-		for x := region.Min.X; x < region.Max.X; x += stride {
-			predicted := slope*luma(before, x, y) + intercept
-			total += math.Abs(luma(after, x, y) - predicted)
+	slope, intercept, ok := robustLine(xs, ys)
+	if !ok {
+		return 0, 0, false
+	}
+
+	fitted := 0
+	for i := range xs {
+		if math.Abs(ys[i]-(slope*xs[i]+intercept)) <= shadeTolerance {
+			fitted++
 		}
 	}
-	total /= n
-	uniform = total < maxShadeResidual &&
-		spread >= minShadeVariation &&
-		slope >= minShadeScale && slope <= maxShadeScale
-	return round2(total), round2(slope), uniform
+	share := float64(fitted) / float64(len(xs))
+	uniform = share >= minShadeFit &&
+		slope >= minShadeScale && slope <= maxShadeScale &&
+		math.Abs(slope-1) >= minShadeStrength
+	return round2(share), round2(slope), uniform
+}
+
+// robustLine fits by taking the median slope over many pairs of points, rather
+// than least squares.
+//
+// A modal is two populations at once: most of the frame dimmed, and a dialog
+// that appeared. Least squares has no defence against that — the dialog is a
+// tight cluster at one end of the range and drags the line into a compromise
+// fitting neither, badly enough to hide the dim completely in the closing
+// direction. A median is unmoved by a minority however extreme it is, which is
+// exactly the property needed here.
+//
+// Pairs are taken at fixed strides rather than at random, so the result is
+// deterministic for the same input — which the whole tool promises.
+func robustLine(xs, ys []float64) (slope, intercept float64, ok bool) {
+	slopes := make([]float64, 0, len(xs)*len(pairStrides))
+	for _, stride := range pairStrides {
+		for i := 0; i+stride < len(xs); i++ {
+			dx := xs[i+stride] - xs[i]
+			// Nearly equal brightness gives an unstable slope and no
+			// information about the map.
+			if math.Abs(dx) < minPairSpread {
+				continue
+			}
+			slopes = append(slopes, (ys[i+stride]-ys[i])/dx)
+		}
+	}
+	if len(slopes) < 64 {
+		return 0, 0, false
+	}
+	sort.Float64s(slopes)
+	slope = slopes[len(slopes)/2]
+
+	offsets := make([]float64, len(xs))
+	for i := range xs {
+		offsets[i] = ys[i] - slope*xs[i]
+	}
+	sort.Float64s(offsets)
+	return slope, offsets[len(offsets)/2], true
+}
+
+// pairStrides spread the sampled pairs across the frame rather than clustering
+// them in one region.
+var pairStrides = []int{1, 7, 53, 211}
+
+// minPairSpread is the brightness difference a pair needs before its slope
+// means anything.
+const minPairSpread = 12.0
+
+// spread is the standard deviation of a sample.
+func spread(values []float64) float64 {
+	var sum, sumSq float64
+	for _, v := range values {
+		sum += v
+		sumSq += v * v
+	}
+	n := float64(len(values))
+	return math.Sqrt(math.Max(0, sumSq/n-(sum/n)*(sum/n)))
 }

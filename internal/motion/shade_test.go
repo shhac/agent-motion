@@ -86,3 +86,65 @@ func TestUniformShadeSeparatesOverlayFromContent(t *testing.T) {
 		}
 	})
 }
+
+// TestShadeSurvivesAnOverlayThatAlsoAddsContent covers the case a real daisyUI
+// modal recording exposed. A dialog over a dimmed page is both things at once,
+// and a plain least-squares line is dragged into a compromise by the dialog —
+// badly enough, in the closing direction where the dimmed page's tonal range is
+// compressed, to hide the dim completely.
+func TestShadeSurvivesAnOverlayThatAlsoAddsContent(t *testing.T) {
+	region := image.Rect(0, 0, 320, 200)
+	pageImg := textured(7)
+
+	withDialog := func(base *image.RGBA) *image.RGBA {
+		out := image.NewRGBA(base.Bounds())
+		copy(out.Pix, base.Pix)
+		for y := 60; y < 140; y++ {
+			for x := 80; x < 240; x++ {
+				out.SetRGBA(x, y, color.RGBA{0xf5, 0xf5, 0xf5, 0xff})
+			}
+		}
+		return out
+	}
+	open := withDialog(dimmed(pageImg, 0.5))
+
+	t.Run("opening is a dim with content on top", func(t *testing.T) {
+		fit, scale, uniform := uniformShade(pageImg, open, region)
+		if !uniform {
+			t.Errorf("modal opening measured fit %.2f scale %.2f and was not called uniform", fit, scale)
+		}
+		if scale > 0.75 {
+			t.Errorf("scale = %.2f, want roughly the 0.5 it was dimmed by", scale)
+		}
+	})
+
+	t.Run("closing is the same change in reverse", func(t *testing.T) {
+		fit, scale, uniform := uniformShade(open, pageImg, region)
+		if !uniform {
+			t.Errorf("modal closing measured fit %.2f scale %.2f and was not called uniform", fit, scale)
+		}
+		if scale <= 1 {
+			t.Errorf("scale = %.2f, want above 1: closing brightens", scale)
+		}
+	})
+}
+
+// Trimming outliers lets any two frames sharing a lot of unchanged background
+// fit a line of slope one. That says most pixels stayed the same, not that the
+// picture was dimmed — and on a real page load it called a content change an
+// overlay until the strength guard was added.
+func TestAMapThatChangesNothingIsNotAnOverlay(t *testing.T) {
+	before := textured(8)
+	after := image.NewRGBA(before.Bounds())
+	copy(after.Pix, before.Pix)
+	// A fifth of the frame becomes different content; the rest is untouched.
+	for y := 0; y < 200; y++ {
+		for x := 0; x < 64; x++ {
+			after.SetRGBA(x, y, color.RGBA{0x20, 0x90, 0x40, 0xff})
+		}
+	}
+	fit, scale, uniform := uniformShade(before, after, image.Rect(0, 0, 320, 200))
+	if uniform {
+		t.Errorf("a content change was called an overlay: fit %.2f scale %.2f", fit, scale)
+	}
+}

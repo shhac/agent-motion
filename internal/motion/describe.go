@@ -290,14 +290,19 @@ func wholeFrameSummary(e Event) string {
 // its brightness, which is the difference between a new screen and a scrim over
 // the old one.
 func shading(e Event) string {
-	if e.ShadeResidual == 0 {
+	if e.ShadeFit == 0 {
 		return ""
 	}
 	if e.Uniform {
-		return fmt.Sprintf(" Every pixel moved through the same brightness map, scaled to %.0f%%, so the content underneath is unchanged — an overlay, a dim, or a theme switch rather than a new screen.",
-			e.ShadeScale*100)
+		rest := ""
+		if e.ShadeFit < 0.97 {
+			rest = fmt.Sprintf(" The remaining %.0f%% is new content on top of it, which is what a dialog over a dimmed page looks like.",
+				(1-e.ShadeFit)*100)
+		}
+		return fmt.Sprintf(" %.0f%% of the frame moved through the same brightness map, scaled to %.0f%%, so what is underneath is unchanged — an overlay, a dim, or a theme switch rather than a new screen.%s",
+			e.ShadeFit*100, e.ShadeScale*100, rest)
 	}
-	return " The content itself changed, not just its brightness."
+	return fmt.Sprintf(" Only %.0f%% of it follows a single brightness map, so the content itself changed rather than just its brightness.", e.ShadeFit*100)
 }
 
 // groupSample reduces one transition to what this group of cells saw.

@@ -162,6 +162,12 @@ func luma(frame image.Image, x, y int) float64 {
 	return (float64(r>>8) + float64(g>>8) + float64(b>>8)) / 3
 }
 
+// settleMargin is how far clear of a whole-frame fade its comparison is taken,
+// in frames. The event's bounds are where activity crossed the noise floor, and
+// an animated transition is still moving on either side of them — sampling at
+// the edge catches a modal half closed, which fits no brightness map at all.
+const settleMargin = 5.0
+
 // shiftBudget caps how many events are worth fetching frames for. Deciding a
 // shift costs two decoded frames, and on footage where everything moves there
 // can be dozens of candidates that are not worth the wait.
@@ -280,18 +286,27 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 func resolveWholeFrame(events []Event, opt TimelineOptions, fps float64, at func(float64) image.Image, beforeMargin, afterMargin float64) {
 	whole := image.Rect(0, 0, opt.SourceWidth, opt.SourceHeight)
 	for i := range events {
-		// Only cuts. A flash returns to what it was, so "did the content change
-		// or only its brightness" has no meaning for one, and its single odd
-		// frame is skipped by the margins anyway.
-		if events[i].Kind != KindCut {
+		// Cuts, and any whole-frame stretch of activity. A real overlay usually
+		// animates: a modal backdrop fading in over a third of a second is a
+		// run of transitions, not the single one a cut is, and testing only
+		// cuts missed the commonest case there is. A flash is excluded because
+		// it returns to what it was, so "did the content change or only its
+		// brightness" has no meaning for one.
+		animated := events[i].Kind == KindBusy && events[i].RegionArea > frameWideArea
+		if events[i].Kind != KindCut && !animated {
 			continue
 		}
-		before, after := at(events[i].Peak-beforeMargin/fps), at(events[i].Peak+afterMargin/fps)
+		// Straddle the whole stretch, not just its peak: for an animated fade
+		// the midpoint is halfway dimmed and compares against nothing useful.
+		// The event's bounds are where activity crossed the noise floor, and a
+		// fade is still finishing on either side of them, so the sample is
+		// taken clear of the transition rather than at its edge.
+		before, after := at(events[i].Start-settleMargin/fps), at(events[i].End+settleMargin/fps)
 		if before == nil || after == nil {
 			continue
 		}
-		residual, scale, uniform := uniformShade(before, after, whole)
-		events[i].ShadeResidual, events[i].ShadeScale, events[i].Uniform = residual, scale, uniform
+		fit, scale, uniform := uniformShade(before, after, whole)
+		events[i].ShadeFit, events[i].ShadeScale, events[i].Uniform = fit, scale, uniform
 		events[i].Summary = wholeFrameSummary(events[i])
 	}
 }

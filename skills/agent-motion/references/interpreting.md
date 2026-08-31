@@ -75,7 +75,7 @@ do, and new content does not.
 |---|---|
 | `uniform_shade_change: true` | The picture underneath is unchanged. A modal backdrop, a dim, a theme switch. |
 | `shade_scale` | The brightness multiplier. About 0.5 means dimmed to half — the signature of a modal backdrop. |
-| `shade_residual` | How far it strayed from that map. Small means an overlay; large means new content. |
+| `shade_fit` | The share of the frame that followed that map. A modal dims most of the frame and puts a dialog on the rest, so this says more than an average could: 0.85 means 85% dimmed and 15% is new content on top. |
 
 Absent means it could not be judged: a blank frame before first paint can be
 mapped onto anything, so the test is refused rather than guessed.
