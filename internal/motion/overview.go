@@ -192,7 +192,7 @@ func inspectTimes(events []Event) []float64 {
 	const budget = 12
 	ranked := append([]Event(nil), events...)
 	sort.SliceStable(ranked, func(i, j int) bool {
-		return prominence(ranked[i]) > prominence(ranked[j])
+		return ranked[i].Prominence() > ranked[j].Prominence()
 	})
 	seen := map[float64]bool{}
 	var out []float64

@@ -102,13 +102,13 @@ func bestOffset(before, after []float64, limit int) (int, float64) {
 			bestD, best = d, distance
 		}
 	}
-	spread := spreadOf(before)
+	variation := spread(before)
 	switch {
 	case bestD == 0, zero-best < minAxisGain:
 		return 0, 0
-	case spread < minProfileSpread:
+	case variation < minProfileSpread:
 		return 0, 0 // nothing to register against; any offset would fit
-	case best > maxResidualShare*spread:
+	case best > maxResidualShare*variation:
 		return 0, 0 // the offset does not actually explain the change
 	}
 	return bestD, 1 - best/zero
@@ -217,12 +217,18 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		return img
 	}
 
-	resolveWholeFrame(events, opt, fps, at, beforeMargin, afterMargin)
-
-	order := brieflyChangedOrder(events, opt)
-	resolved := make([]bool, len(events))
+	// Copy before anything is written, not after. resolveWholeFrame fills in
+	// the shade fields in place, so running it on the argument left the
+	// caller's slice half-updated by a function whose signature promises a new
+	// one. There is one caller and it reassigns, so nothing was wrong — but a
+	// second caller would have inherited an aliasing bug for free.
 	out := make([]Event, len(events))
 	copy(out, events)
+
+	resolveWholeFrame(out, opt, fps, at)
+
+	order := brieflyChangedOrder(out, opt)
+	resolved := make([]bool, len(out))
 	spent := 0
 
 	for _, i := range order {
@@ -232,7 +238,7 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		if resolved[i] {
 			continue
 		}
-		before, after := at(events[i].Peak-beforeMargin/fps), at(events[i].Peak+afterMargin/fps)
+		before, after := at(out[i].Peak-beforeMargin/fps), at(out[i].Peak+afterMargin/fps)
 		if before == nil || after == nil {
 			continue
 		}
@@ -241,17 +247,17 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 		// Try this event with each partner that began at the same instant,
 		// widest first, then alone.
 		partner := -1
-		region := rect(events[i].Region)
+		region := rect(out[i].Region)
 		for _, j := range order {
-			if j == i || resolved[j] || events[j].Peak != events[i].Peak {
+			if j == i || resolved[j] || out[j].Peak != out[i].Peak {
 				continue
 			}
-			union := region.Union(rect(events[j].Region))
-			if area(union) < 2*max(area(region), area(rect(events[j].Region))) {
+			union := region.Union(rect(out[j].Region))
+			if area(union) < 2*max(area(region), area(rect(out[j].Region))) {
 				continue
 			}
 			if moved := measureShift(before, after, union, opt); moved.Moved() {
-				out[i] = asShift(events[i], union, moved, opt)
+				out[i] = asShift(out[i], union, moved, opt)
 				resolved[i], resolved[j] = true, true
 				partner = j
 				break
@@ -261,7 +267,7 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 			continue
 		}
 		if moved := measureShift(before, after, region, opt); moved.Moved() {
-			out[i] = asShift(events[i], region, moved, opt)
+			out[i] = asShift(out[i], region, moved, opt)
 			resolved[i] = true
 		}
 	}
@@ -284,7 +290,7 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 // changed or merely changed brightness. Both look the same in the statistics,
 // and it is the most dramatic event in a recording — the one most likely to be
 // read as the headline and most expensive to check by hand.
-func resolveWholeFrame(events []Event, opt TimelineOptions, fps float64, at func(float64) image.Image, beforeMargin, afterMargin float64) {
+func resolveWholeFrame(events []Event, opt TimelineOptions, fps float64, at func(float64) image.Image) {
 	whole := image.Rect(0, 0, opt.SourceWidth, opt.SourceHeight)
 	for i := range events {
 		// Cuts, and any whole-frame stretch of activity. A real overlay usually
@@ -452,7 +458,7 @@ func brieflyChangedOrder(events []Event, opt TimelineOptions) []int {
 		}
 	}
 	sort.SliceStable(order, func(a, b int) bool {
-		return prominence(events[order[a]]) > prominence(events[order[b]])
+		return events[order[a]].Prominence() > events[order[b]].Prominence()
 	})
 	return order
 }
@@ -472,18 +478,3 @@ func shiftScore(area float64, dx, dy int, opt TimelineOptions) float64 {
 func rect(r [4]int) image.Rectangle { return image.Rect(r[0], r[1], r[2], r[3]) }
 
 func area(r image.Rectangle) int { return r.Dx() * r.Dy() }
-
-// spreadOf is the standard deviation of a profile: how much signal there is to
-// register against.
-func spreadOf(p []float64) float64 {
-	if len(p) == 0 {
-		return 0
-	}
-	var sum, sumSq float64
-	for _, v := range p {
-		sum += v
-		sumSq += v * v
-	}
-	n := float64(len(p))
-	return math.Sqrt(math.Max(0, sumSq/n-(sum/n)*(sum/n)))
-}

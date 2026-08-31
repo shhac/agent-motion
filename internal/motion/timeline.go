@@ -140,7 +140,7 @@ func trimToBudget(events []Event, budget int) []Event {
 		order[i] = i
 	}
 	sort.SliceStable(order, func(i, j int) bool {
-		return prominence(events[order[i]]) > prominence(events[order[j]])
+		return events[order[i]].Prominence() > events[order[j]].Prominence()
 	})
 	keep := make([]bool, len(events))
 	for _, i := range order[:budget] {

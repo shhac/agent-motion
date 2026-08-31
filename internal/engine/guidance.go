@@ -78,14 +78,12 @@ func cadenced(events []motion.Event) *motion.Event {
 		if events[i].Kind != motion.KindFlicker && events[i].Kind != motion.KindGradual {
 			continue
 		}
-		if best == nil || prominence(events[i]) > prominence(*best) {
+		if best == nil || events[i].Prominence() > best.Prominence() {
 			best = &events[i]
 		}
 	}
 	return best
 }
-
-func prominence(e motion.Event) float64 { return math.Max(e.PeakChanged, e.PeakDrift) }
 
 // smallest picks the event hardest to see at full-frame scale.
 func smallest(events []motion.Event) *motion.Event {

@@ -5,10 +5,33 @@ import (
 	"sort"
 )
 
-// prominence ranks events by how much they changed, on whichever timescale saw
-// them. Both the trimmed event list and the suggested inspection timestamps
-// must agree on this, or an agent reads two lists ordered by different rules.
-func prominence(e Event) float64 { return math.Max(e.PeakChanged, e.PeakDrift) }
+// Prominence ranks events by how much they changed, on whichever timescale saw
+// them. Every list an agent reads must agree on this, or two of them are
+// ordered by different rules — the trimmed event list, the suggested
+// inspection timestamps, the events worth fetching frames for, and the sweep
+// engine proposes. It is a method rather than a package function because the
+// fifth of those lives in another package, where a private copy of the formula
+// went on compiling and silently disagreeing.
+func (e Event) Prominence() float64 { return math.Max(e.PeakChanged, e.PeakDrift) }
+
+// spread is the standard deviation of a series: how much signal there is to
+// measure against. Two calibrated thresholds are stated against it —
+// minProfileSpread, below which a brightness profile has nothing to register a
+// displacement against, and minShadeVariation, below which a frame is too flat
+// to tell one brightness map from another. They threshold the same quantity,
+// which two copies under two names hid.
+func spread(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var sum, sumSq float64
+	for _, v := range values {
+		sum += v
+		sumSq += v * v
+	}
+	n := float64(len(values))
+	return math.Sqrt(math.Max(0, sumSq/n-(sum/n)*(sum/n)))
+}
 
 func round2(v float64) float64 { return roundTo(v, 2) }
 

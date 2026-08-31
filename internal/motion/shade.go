@@ -145,14 +145,3 @@ var pairStrides = []int{1, 7, 53, 211}
 // minPairSpread is the brightness difference a pair needs before its slope
 // means anything.
 const minPairSpread = 12.0
-
-// spread is the standard deviation of a sample.
-func spread(values []float64) float64 {
-	var sum, sumSq float64
-	for _, v := range values {
-		sum += v
-		sumSq += v * v
-	}
-	n := float64(len(values))
-	return math.Sqrt(math.Max(0, sumSq/n-(sum/n)*(sum/n)))
-}

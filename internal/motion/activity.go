@@ -56,34 +56,39 @@ func (a *Analyzer) Activity(opt TimelineOptions) ([]CellActivity, []Span) {
 	floors := a.cellFloors(opt.MinFloor)
 	gap := a.gapSamples(opt.MergeGap, opt.FPS)
 
-	busy := make([][]bool, len(floors))
+	// Where the frame moved as a whole. A cell busy at that moment locates
+	// nothing, so those samples are held back from the cells and reported once,
+	// separately, as what they are.
 	wide := make([]bool, len(a.samples))
-	for c := range floors {
-		busy[c] = make([]bool, len(a.samples))
-		for i := range a.samples {
-			busy[c][i] = a.cellFraction(i, c, fast) > floors[c]
-		}
-	}
-	for i := range wide {
+	for i := range a.samples {
 		lit := 0
-		for c := range busy {
-			if busy[c][i] {
+		for c := range floors {
+			if a.cellFraction(i, c, fast) > floors[c] {
 				lit++
 			}
 		}
-		wide[i] = float64(lit) >= frameWideArea*float64(len(busy))
+		wide[i] = float64(lit) >= frameWideArea*float64(len(floors))
 	}
 
+	// The segmentation the timeline uses, masked differently: it hides the
+	// samples a cut has already claimed, this hides the ones where everything
+	// moved at once. Sharing the pass is what keeps the two commands agreeing
+	// about where something happened — written out twice, the definition of a
+	// busy cell could drift between them with nothing failing to compile.
 	out := make([]CellActivity, 0, len(floors))
-	for c := range floors {
-		local := func(i int) bool { return busy[c][i] && !wide[i] }
-		// A run of one sample is not a stretch. Taking the frame-wide moments
-		// out of a cell's activity leaves a sample of residue at each edge of
-		// them, and a cell described as busy for zero seconds is worse than no
-		// line at all.
-		if spans := lasting(runs(len(a.samples), local, gap)); len(spans) > 0 {
-			out = append(out, a.cellActivity(c, spans, to-from, opt))
+	spans := a.fastSpans(floors, wide, gap)
+	for start := 0; start < len(spans); {
+		end := start
+		for end < len(spans) && spans[end].cell == spans[start].cell {
+			end++
 		}
+		// A run of one sample is not a stretch. Holding the frame-wide moments
+		// back leaves a sample of residue at each edge of them, and a cell
+		// described as busy for zero seconds is worse than no line at all.
+		if kept := lasting(stretches(spans[start:end])); len(kept) > 0 {
+			out = append(out, a.cellActivity(spans[start].cell, kept, to-from, opt))
+		}
+		start = end
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Share != out[j].Share {
@@ -102,6 +107,15 @@ func (a *Analyzer) Activity(opt TimelineOptions) ([]CellActivity, []Span) {
 		})
 	}
 	return out, frameWide
+}
+
+// stretches drops the cell each span belongs to, which the caller already knows.
+func stretches(cells []cellSpan) []span {
+	out := make([]span, len(cells))
+	for i, c := range cells {
+		out[i] = c.span
+	}
+	return out
 }
 
 func lasting(spans []span) []span {
