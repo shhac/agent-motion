@@ -5,6 +5,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -208,6 +209,25 @@ func (e *Engine) Analyse(ctx context.Context, opt AnalyseOptions) (*Analysis, er
 			ignored:     analyzer.Ignored(),
 		},
 	}, nil
+}
+
+// Records splits the analysis into its events and everything else, so a
+// line-per-record format can stream the list and still carry the context that
+// stops a reader over-reading it.
+//
+// The meta half is derived from the analysis' own JSON rather than listed field
+// by field, so the two renderings cannot drift apart.
+func (a *Analysis) Records() ([]any, map[string]any) {
+	items := make([]any, len(a.Events))
+	for i, e := range a.Events {
+		items[i] = e
+	}
+	meta := map[string]any{}
+	if raw, err := json.Marshal(a); err == nil {
+		_ = json.Unmarshal(raw, &meta)
+	}
+	delete(meta, "events")
+	return items, meta
 }
 
 func (o AnalyseOptions) withDefaults(info video.Info) AnalyseOptions {

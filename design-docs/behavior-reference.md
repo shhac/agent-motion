@@ -192,6 +192,30 @@ never drops below two pixels, so a cell of two pixels or fewer can never be
 reported as active, and a small analysis width silently returned nothing at
 all. The grid is coarsened until every cell holds at least twelve pixels.
 
+## What is offered as a shift, and what confirms one
+
+Displacement is measured for one-off changes and for stretches of activity that
+are not long enough to be the recording's backdrop. A layout shift usually
+animates — an accordion, a disclosure widget, anything with a CSS transition
+moves over several frames — so restricting candidates to single transitions
+missed the commonest shift on a real page. An overlay is never a candidate:
+content dimmed under a scrim did not move.
+
+An offset from the profile correlation is then checked against the frames
+themselves. Undoing a real displacement makes at least half the changed pixels
+between the two frames go away; undoing a coincidence does not. This is not
+redundant with the profile's own guards, because they are computed from the
+same profile that produced the offset. A page is periodic — regular line
+spacing, repeated cards — so a profile can match confidently at a wrong
+multiple, and on a real recording it did: a 659px jump-scroll, too far to
+search and leaving too little overlap to register, was reported as 198px, the
+spacing of the block it locked onto.
+
+The method needs most of the content to still be on screen afterwards. A move
+of more than about half the region it happened in cannot be measured, and is
+reported as a change rather than a movement. `limits` says so, because "no
+shift" is otherwise readable as "nothing moved".
+
 ## The spatial index
 
 `activity` reports the same grid the segmenter uses, as text, because the

@@ -24,6 +24,71 @@ return plain paths, which three rounds of agent trials read without difficulty.
 Worth revisiting when the convention settles; not worth changing a contract
 that has been evaluated.
 
+## D33 — A layout shift usually animates too
+
+The daisyUI accordion recording was made to test exactly this, and the tool
+reported no shift at all on a page whose ground truth is "each change moves the
+items below it".
+
+The cause was the same shape as D30. Only `step` and `blip` events were ever
+offered to the displacement measurement, so a shift had to happen in a single
+transition to be found. Anything with a CSS transition on it — an accordion, a
+disclosure widget, most of what a real page does when it reflows — moves over
+several frames and is a stretch of activity instead, which was never a
+candidate. Sustained activity is now a candidate too, unless it runs long
+enough to be the backdrop the recording happens against, which is a ticker
+rather than a layout settling. An overlay is excluded outright: content whose
+brightness changed under a scrim is not content that moved.
+
+That alone found real shifts nothing had reported before — a 13px jump on CNN,
+one on ESPN, and the eleven steps of the animation at the foot of a personal
+site, each correctly marked as continuous rather than as a one-off.
+
+## D34 — Ask the pixels, not the summary of them
+
+Widening the candidates immediately produced a confident wrong answer, and it
+is the most instructive result of the session.
+
+The accordion recording jump-scrolls 659px in two frames. That is further than
+the search looks, and far enough that too little of the region overlaps to
+register at all — so the correlation settled instead on 198px, which is the
+spacing of a repeated block on the page, and reported it with high confidence.
+A page is deeply periodic: regular line spacing, repeated cards, a column of
+identical rows. A one-dimensional profile cannot tell a true match from a
+periodic one, and the existing guards are all computed from that same profile,
+so none of them could see it either.
+
+A displacement is now checked against the frames rather than against a summary
+of them: undoing a real shift makes most of the difference between the two
+frames go away, and undoing a coincidence does not. Half the changed pixels
+must disappear. The 198px answer fails it, every genuine shift across the
+fixtures and fourteen real recordings survives it, and the accordion is
+honestly reported as a change the tool could not measure as a movement.
+
+`limits` now says so directly, because "no shift" was otherwise readable as
+"nothing moved" on a recording where a whole screen of content had moved.
+
+A third thing was tried and thrown away. A static ad column inside the region
+defeats the profile — with it excluded the accordion measured 198px, with it
+included nothing — so the region was split into bands and the median of the
+bands that moved was taken, in the same spirit as the median slope in D30. It
+made no difference to a single event across every fixture and every real
+recording; its only effect anywhere was to produce the false 198px. Measured
+against its one claim, it earned nothing, so it is not in the tool.
+
+## D35 — Asking for lines should give lines
+
+`timeline --format jsonl` put the entire analysis on one line. That satisfies
+the format and defeats the reason to ask for it: an agent asks for lines so it
+can filter them, and `grep '"kind":"shift"'` on a single four-kilobyte line
+returns the whole document or nothing.
+
+The events are now one record per line and everything else follows as meta
+lines, the same shape `activity` uses. The meta half is derived from the
+analysis' own JSON rather than listed field by field, so the two renderings
+cannot drift apart, and `limits` and `suitability` survive the change of format
+— a list a caller can filter still must not be readable as the whole story.
+
 ## D31 — Where, in text, and only where it means something
 
 The activity map was the tool's only answer to "where", and it was a picture.

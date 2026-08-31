@@ -77,6 +77,16 @@ The activity series is a sparkline string by default. Sixty pretty-printed
 floats cost far more than they tell you; the numbers are available behind
 `--series` for a caller that wants them.
 
+## Rendering a result as lines
+
+`--format jsonl` on a result whose substance is a list renders one record per
+line and everything else as meta lines after them. For `timeline` the records
+are the events; for `activity` they are the cells. Collapsing a whole analysis
+onto a single line satisfies the format and defeats the reason to ask for it,
+which is to filter. `limits` and `suitability` are meta lines rather than being
+dropped: a list a caller can filter must still not be readable as the whole
+story.
+
 ## Cropping
 
 `--region` takes the four numbers an event already reports in `region_xyxy`, so

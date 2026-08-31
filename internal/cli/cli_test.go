@@ -326,3 +326,41 @@ func TestActivityDefaultsToNDJSON(t *testing.T) {
 		}
 	}
 }
+
+// Asking for lines and getting one enormous line answers the letter of the
+// format and none of the point of it: the reason to ask is to filter.
+func TestTimelineJSONLIsOneLinePerEvent(t *testing.T) {
+	root := newRoot("test", fixture.Player().Decoder())
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"timeline", "player.mp4", "--format", "jsonl"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	events, meta := 0, map[string]bool{}
+	for i, line := range strings.Split(strings.TrimSpace(stdout.String()), "\n") {
+		var one map[string]any
+		if err := json.Unmarshal([]byte(line), &one); err != nil {
+			t.Fatalf("line %d is not one JSON object: %v", i, err)
+		}
+		if _, ok := one["kind"]; ok {
+			events++
+			continue
+		}
+		for k := range one {
+			meta[k] = true
+		}
+	}
+	if events < 2 {
+		t.Errorf("got %d event records; the player fixture has several", events)
+	}
+	// The context that stops a reader over-reading the list must survive the
+	// change of format.
+	for _, key := range []string{"limits", "suitability", "narrative", "analysis"} {
+		if !meta[key] {
+			t.Errorf("meta line %q missing from the jsonl rendering", key)
+		}
+	}
+}

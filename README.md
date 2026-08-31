@@ -74,6 +74,7 @@ Every result carries `next_steps` with commands you can run verbatim, and
 ```sh
 agent-motion sheet recording.mp4                       # see the whole thing
 agent-motion activity recording.mp4                    # where, not just when
+agent-motion timeline recording.mp4 --format jsonl | grep '"kind":"shift"'
 agent-motion timeline recording.mp4 --start 17 --end 19 --threshold 4
 agent-motion frames recording.mp4 --at 17.62
 

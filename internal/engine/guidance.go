@@ -143,6 +143,7 @@ func limits(p Params, sourceWidth int, sourceFPS float64, fit motion.Assessment)
 	if p.DriftSeconds <= 0 {
 		out = append(out, "The slow timescale is off, so change too gradual to clear the threshold between adjacent frames — a fade, an easing animation, a creeping layout shift — is invisible. Raise --drift to see it.")
 	}
+	out = append(out, "A shift is found by registering one frame against the other, which needs most of the content to still be on screen afterwards. A move of more than about half the region it happened in — a page jumping a whole screen, a scroll — leaves too little overlap to measure, and is reported as a change rather than as a movement. 'No shift' is not 'nothing moved'.")
 	out = append(out, "Event boundaries depend on --threshold and --analysis-width: a lower threshold can merge, split or re-scope events rather than only adding them, so two runs are not directly comparable.")
 	return append(out, "Regions are bounding boxes of change, not object outlines. Look at the frames before drawing conclusions.")
 }

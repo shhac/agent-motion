@@ -36,6 +36,11 @@ The main command. Decodes the interval once and describes it.
 agent-motion timeline recording.mp4 --start 12 --end 18 --threshold 6
 ```
 
+`--format jsonl` renders the events one per line, followed by meta lines for
+everything else — the narrative, `analysis`, `suitability`, `next_steps` and
+`limits`. Use it to filter by kind, time or region without parsing the whole
+document.
+
 ## `activity <video>`
 
 The spatial index: where change happened, rather than what it was. NDJSON by

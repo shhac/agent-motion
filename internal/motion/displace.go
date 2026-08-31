@@ -67,10 +67,11 @@ func Translation(before, after image.Image, region image.Rectangle, limit int) D
 	if region.Dx() < 4 || region.Dy() < 4 || limit < 1 {
 		return Displacement{}
 	}
+	limitY, limitX := min(limit, region.Dy()/2), min(limit, region.Dx()/2)
 	dy, confidenceY := bestOffset(
-		rowProfile(before, region), rowProfile(after, region), min(limit, region.Dy()/2))
+		rowProfile(before, region), rowProfile(after, region), limitY)
 	dx, confidenceX := bestOffset(
-		colProfile(before, region), colProfile(after, region), min(limit, region.Dx()/2))
+		colProfile(before, region), colProfile(after, region), limitX)
 
 	// Take the confidence from whichever axis actually moved. A purely vertical
 	// shift leaves the column profile unchanged, and scoring that as "no
@@ -218,7 +219,7 @@ func ResolveShifts(events []Event, opt TimelineOptions, fps float64, frame Frame
 
 	resolveWholeFrame(events, opt, fps, at, beforeMargin, afterMargin)
 
-	order := brieflyChangedOrder(events)
+	order := brieflyChangedOrder(events, opt)
 	resolved := make([]bool, len(events))
 	out := make([]Event, len(events))
 	copy(out, events)
@@ -350,7 +351,63 @@ func longRunning(e Event, opt TimelineOptions) bool {
 func measureShift(before, after image.Image, region image.Rectangle, opt TimelineOptions) Displacement {
 	span := max(opt.SourceWidth, opt.SourceHeight)
 	limit := min(max(region.Dx(), region.Dy())/2, span/3)
-	return Translation(before, after, region, limit)
+	moved := Translation(before, after, region, limit)
+	if moved.Moved() && !explainsChange(before, after, region, moved) {
+		return Displacement{}
+	}
+	return moved
+}
+
+// shiftVerifyThreshold is the per-pixel luminance difference that counts as a
+// changed pixel when checking a displacement, matching the analysis default.
+const shiftVerifyThreshold = 12.0
+
+// shiftVerifyStride subsamples the check. It is a proportion over hundreds of
+// thousands of pixels, and every fourth one settles it.
+const shiftVerifyStride = 2
+
+// minShiftImprovement is how much of the difference between the two frames
+// undoing the displacement has to remove.
+const minShiftImprovement = 0.5
+
+// explainsChange asks the frames themselves whether the offset is real.
+//
+// A one-dimensional profile cannot tell a true match from a periodic one, and a
+// page is deeply periodic: regular line spacing, repeated cards, a column of
+// identical rows. Measured on a real page that jump-scrolled 659px — further
+// than the profile could search, and far enough that too little of the region
+// overlapped to register at all — the correlation instead settled confidently
+// on 198px, which is the spacing of the repeated block it locked onto.
+//
+// So the offset is checked against the pixels rather than the summary of them:
+// undoing a real displacement makes most of the difference between the two
+// frames go away, and undoing a coincidence does not.
+func explainsChange(before, after image.Image, region image.Rectangle, d Displacement) bool {
+	still, shifted, counted := 0, 0, 0
+	for y := region.Min.Y; y < region.Max.Y; y += shiftVerifyStride {
+		sy := y - d.DY
+		if sy < region.Min.Y || sy >= region.Max.Y {
+			continue
+		}
+		for x := region.Min.X; x < region.Max.X; x += shiftVerifyStride {
+			sx := x - d.DX
+			if sx < region.Min.X || sx >= region.Max.X {
+				continue
+			}
+			counted++
+			here := luma(after, x, y)
+			if math.Abs(here-luma(before, x, y)) > shiftVerifyThreshold {
+				still++
+			}
+			if math.Abs(here-luma(before, sx, sy)) > shiftVerifyThreshold {
+				shifted++
+			}
+		}
+	}
+	if counted == 0 || still == 0 {
+		return false
+	}
+	return float64(shifted) <= (1-minShiftImprovement)*float64(still)
 }
 
 func asShift(e Event, region image.Rectangle, moved Displacement, opt TimelineOptions) Event {
@@ -372,10 +429,25 @@ func asShift(e Event, region image.Rectangle, moved Displacement, opt TimelineOp
 // page loads, a browser re-layout never registered as a translation — content
 // re-wraps and resizes rather than sliding — so including them found nothing
 // and spent the frame budget ahead of the smaller events that do translate.
-func brieflyChangedOrder(events []Event) []int {
+// brieflyChangedOrder picks the events worth spending frames on.
+//
+// A layout shift usually animates. An accordion expanding, a disclosure
+// widget, anything with a CSS transition on it moves its content over several
+// frames, which makes it a stretch of activity rather than the single step a
+// shift was first assumed to be — so the commonest shift on a real page could
+// not be reported at all. Sustained activity is a candidate too, unless it
+// runs long enough to be the backdrop the recording happens against, which is
+// a ticker or a spinner rather than a layout settling.
+//
+// An overlay is excluded: content whose brightness changed under a scrim is
+// not content that moved, and asking would only invite a coincidence.
+func brieflyChangedOrder(events []Event, opt TimelineOptions) []int {
 	var order []int
 	for i, e := range events {
-		if e.Kind == KindStep || e.Kind == KindBlip {
+		if e.Uniform {
+			continue
+		}
+		if e.Kind == KindStep || e.Kind == KindBlip || (e.Kind == KindBusy && !longRunning(e, opt)) {
 			order = append(order, i)
 		}
 	}

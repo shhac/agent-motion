@@ -35,6 +35,18 @@ func (g *globals) print(cmd *cobra.Command, value any) error {
 	if err != nil {
 		return err
 	}
+	// A result whose substance is a list renders as one record per line when
+	// asked for NDJSON. Collapsing a whole analysis onto a single line answers
+	// the letter of the format and none of the point of it: the reason to ask
+	// for lines is to filter them.
+	if format == output.FormatNDJSON {
+		if r, ok := value.(interface {
+			Records() ([]any, map[string]any)
+		}); ok {
+			items, meta := r.Records()
+			return output.WriteList(cmd.OutOrStdout(), format, items, meta, output.PruneNils)
+		}
+	}
 	return output.Print(cmd.OutOrStdout(), value, format, output.PruneNils)
 }
 

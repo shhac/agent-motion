@@ -50,6 +50,19 @@ one character per bucket, least to most active: `_ . : - = + * #`. Its scale is
 relative to `activity_sparkline_full_scale`, so it is for orientation, not
 measurement, and `gradual` events do not appear in it.
 
+## Narrowing down to one kind of event
+
+```sh
+agent-motion timeline recording.mp4 --format jsonl | grep '"kind":"shift"'
+```
+
+`--format jsonl` renders the events one per line, with the narrative,
+`suitability`, `limits` and the rest following as meta lines. Each event line
+carries `kind`, `start_seconds`, `end_seconds`, `peak_seconds`, `region_xyxy`
+and `position`, so filtering by kind, time or place needs no parsing of the
+whole document. Read the `limits` line before concluding anything from what
+you filtered out.
+
 ## Where, not just when
 
 ```sh

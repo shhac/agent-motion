@@ -32,6 +32,12 @@ WATCHING ONE EVENT UNFOLD
   Paste the event's own span back in and the samples are spaced for you.
   --during works on frames too.
 
+NARROWING DOWN
+  agent-motion timeline clip.mp4 --format jsonl | grep '"kind":"shift"'
+  jsonl renders the events one per line, with the narrative, suitability and
+  limits following as meta lines, so you can filter by kind, time or region
+  without parsing the whole document.
+
 WHERE, NOT JUST WHEN
   agent-motion activity clip.mp4
   The activity map in text, for narrowing down without looking at a picture.
