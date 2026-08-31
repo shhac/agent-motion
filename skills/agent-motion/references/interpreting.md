@@ -25,7 +25,7 @@
 
 | Field | What it is |
 |---|---|
-| `kind` | Shape of the change. See the table in SKILL.md. |
+| `kind` | Shape of the change. See [Event kinds](#event-kinds) below. |
 | `start_seconds`, `end_seconds`, `peak_seconds` | When, in source-video seconds. |
 | `region_xyxy` | Bounding box of the change in **source** pixels, `[x0,y0,x1,y1]`. |
 | `region_area_fraction` | That box as a fraction of the frame. |
@@ -129,3 +129,46 @@ mapped onto anything, so the test is refused rather than guessed.
 - Questions about *what a thing is* rather than *when it changed*: go straight
   to `sheet` and look.
 - Audio: not analysed at all.
+
+## Event kinds
+
+| Kind | Means |
+|---|---|
+| `cut` | most of the frame changed at once and stayed changed |
+| `flash` | most of the frame changed for a frame or two, then returned |
+| `step` | brief localised change that is still there afterwards |
+| `blip` | brief localised change that reverted |
+| `flicker` | one area toggling repeatedly; `changes_per_second` is reported |
+| `motion` | activity whose centre travels; `direction` and `travel_pixels` reported. If it reverses once, `jump_backwards_pixels` marks where — usually the bug, when the movement itself is expected |
+| `gradual` | too slow to see between frames; found over the `--drift` window |
+| `busy` | sustained activity with no clearer shape |
+| `stall` | activity that was running continuously stopped, then resumed |
+| `shift` | the same content in a new place — it moved rather than appearing |
+
+Kinds describe the **shape** of a change, never its meaning. A `step` might be a
+button appearing, a tooltip closing, or a value updating — pull the frames.
+
+`stall` is the exception worth understanding: it is an *absence* of change, so
+no pixel shows it. It means something that had been animating continuously —
+a spinner, a caret, a polling indicator — stopped and then started again. On a
+"the page felt janky" report that is usually the answer.
+
+## Limits worth stating back
+
+- No object recognition, no text reading, no explanation of cause.
+- Timestamps are frame-scale. At 30fps every one is accurate to about 33ms, and
+  seeking snaps to the nearest frame. Do not quote them more precisely, and
+  expect a run at a lower `--sample-fps` to move them.
+- Regions are bounding boxes of change, not object outlines.
+- Analysis is downscaled to `--analysis-width` (320 by default) unless you pass
+  `--native`; thin features can be missed.
+- A move larger than about half the region it happened in cannot be registered
+  and is reported as a change rather than a movement. No `shift` is not
+  evidence that nothing moved.
+- A moving camera, a scrolling page, a slow zoom, or ambient motion — wind in
+  foliage, water, fire, a crowd, film grain — makes everything an event. The
+  tool detects this itself and says so in `suitability`; believe it, and switch
+  to `sheet` and `frames`.
+- On a still screen, a gap is just a gap. A `stall` is only reported when
+  something that *was* running continuously stopped, so a quiet stretch on an
+  otherwise static recording is not one.

@@ -21,10 +21,6 @@ It is built for **fixed-viewport** recordings — a screen capture, a browser
 session, a visual test, a rendered scene. A handheld or panning camera makes
 every pixel change at once, and the results become much weaker.
 
-`agent-motion inspect <video>` is the cheap first call — dimensions, frame rate,
-duration and codec, with nothing decoded. `agent-motion mcp` serves every
-command over MCP for a client that does not have a shell.
-
 ## Start here
 
 ```sh
@@ -45,286 +41,106 @@ Read the fields in this order:
    that nothing happened.
 5. `next_steps` — commands you can run verbatim.
 
-`activity_sparkline` shows the shape of frame-to-frame activity at a glance,
-one character per bucket, least to most active: `_ . : - = + * #`. Its scale is
-relative to `activity_sparkline_full_scale`, so it is for orientation, not
-measurement, and `gradual` events do not appear in it.
+`agent-motion inspect <video>` is the cheap first call if you only need
+dimensions, frame rate, duration and codec — it decodes nothing.
+`agent-motion mcp` serves every command over MCP for a client without a shell.
 
-## Narrowing down to one kind of event
+## Which command answers which question
 
-```sh
-agent-motion timeline recording.mp4 --format jsonl | grep '"kind":"shift"'
-```
+| Question | Command |
+|---|---|
+| What happens, and when? | `timeline` |
+| **Where** on screen did it happen? | `activity` — NDJSON, one line per busy region |
+| What does it actually look like? | `sheet` — one PNG of many captioned real frames |
+| What is in this exact frame? | `frames --at 17.62` |
+| Are these two moments the same? | `compare --at 14.9,18.5` — exact pixel count |
+| Should this build fail? | `check --max-shift-score 0.05` — exits non-zero |
+| Where was the action, as a picture? | `project` — activity map PNG |
 
-`--format jsonl` renders the events one per line, with the narrative,
-`suitability`, `limits` and the rest following as meta lines. Each event line
-carries `kind`, `start_seconds`, `end_seconds`, `peak_seconds`, `region_xyxy`
-and `position`, so filtering by kind, time or place needs no parsing of the
-whole document. Read the `limits` line before concluding anything from what
-you filtered out.
+Only `timeline` and `activity` are needed for most questions. Both take the
+same analysis flags, and both carry `limits` and `suitability`.
 
-## Where, not just when
+## Four things not to misread
 
-```sh
-agent-motion activity recording.mp4
-```
+These are the misreadings that produce confidently wrong answers. Everything
+else in this skill is detail; these are load-bearing.
 
-NDJSON, one line per part of the frame that was busy **while the rest of it
-held still**, busiest first. It is the activity map as text: the same spatial
-answer the `project` image gives, for narrowing down without looking at a
-picture.
+**1. An empty result is not "nothing happened".** Every result carries `limits`
+saying what that run could not have seen — a threshold too high, an analysis
+width too coarse, a timescale switched off. Read it before reporting an
+absence. `activity` returning no cells means nothing happened *in one place
+while the rest of the frame held still*; its `frame_wide` meta line is where
+whole-frame change is reported.
 
-Each line carries `cell`, `box_xyxy`, `busy_share`, `busy_seconds`, `ranges`
-and `peak_changed_fraction`. Sort or filter on `busy_share`: a cell busy for
-most of the recording is a spinner, a video or an animation; one busy for a
-fiftieth of it is a single change worth a closer look. `box_xyxy` goes
-straight into `--region`.
+**2. No `shift` is not "nothing moved".** A displacement is found by
+registering one frame against the other, which needs most of the content still
+on screen afterwards. A move of more than about half its region — a page
+jumping a whole screen, a scroll — leaves too little overlap to measure and is
+reported as a `cut` or `busy` change instead. When a large region changes and
+nothing claims to have moved, look at the frames.
 
-Stretches where the *whole* frame moved at once are not listed as cells. They
-would light every cell equally and locate nothing, so they are reported once,
-separately, in the `frame_wide` meta line — a page navigation, a cut, or a
-modal backdrop dimming the page. An empty list of cells with a full
-`frame_wide` is a real answer: everything that happened happened everywhere.
+**3. Kinds name the shape of a change, never its meaning.** A `step` might be a
+button appearing, a tooltip closing, or a value updating. The tool does not
+recognise objects, read text, or explain cause. `shift` is the one kind that
+says what happened to the content — the same pixels in a new place — and it is
+only ever set from measurement.
 
-An empty list is never "nothing happened". Read `frame_wide`, then `timeline`.
-
-## Then see it
-
-```sh
-agent-motion sheet recording.mp4
-```
-
-Writes one PNG containing many real frames, each captioned with its timestamp
-and the event it belongs to, choosing the moments from the analysis. Open it
-with the Read tool. This is usually the fastest way to learn what a recording
-is actually of.
-
-For specific moments, pass `--at`:
-
-```sh
-agent-motion sheet recording.mp4 --at 3.4,7.1,12.0
-agent-motion frames recording.mp4 --at 17.62      # full-size stills
-```
-
-## Watching one event unfold
-
-An event's start and end say a panel toggled ten times a second, or a colour
-drifted for four seconds. Neither says what the toggle or the drift *looks*
-like. Paste the event's own span back in and let the tool space the samples:
-
-```sh
-agent-motion sheet recording.mp4 --during 13.07:13.40 --count 10 \
-  --region 498,38,582,102 --pad 12 --quick
-```
-
-`--during` works on `frames` too. `next_steps` proposes one of these for any
-event with internal cadence.
-
-## Seeing something small
-
-A 20x20 indicator or a 2px layout shift is invisible in a full-frame still.
-Crop to the region and magnify — `--region` takes an event's `region_xyxy`
-verbatim, and cropping happens before scaling, so `--width` enlarges it:
-
-```sh
-agent-motion frames recording.mp4 --at 6.2 --region 200,120,202,160 \
-  --pad 24 --width 480
-```
-
-`--pad` widens the crop so a thin feature is not flush against the edge. It
-works on `sheet` too, which then crops every tile the same way — the fastest
-way to watch one small element change over time.
+**4. Believe `suitability`.** On footage where everything moves at once the
+event list is a list of fragments, and a `check` that passes on it means
+nothing. The tool detects this itself and says so.
 
 ## Content shift
 
-A `shift` is the one kind that says *what happened to the content*, not just
-that it changed. It means the pixels that were there are still there, somewhere
-else — which on a web page separates a bug from the page working normally.
+A `shift` means the pixels that were there are still there, somewhere else —
+which on a web page separates a bug from the page working normally.
 
 ```json
 "kind": "shift", "moved_by_pixels": [0, 40], "layout_shift_score": 0.0275
 ```
 
 `moved_by_pixels` is the displacement in source pixels, positive Y down,
-measured from the two real frames either side of the transition rather than
-from the downscaled analysis, so it is exact. `layout_shift_score` is the share
-of the frame affected times how far it went. It is CLS-*shaped* and is not
-Chrome's Cumulative Layout Shift, which comes from the DOM, covers a session
-window, and knows which elements are unstable. Use it to rank and to threshold,
-not to report a Core Web Vital.
+measured from the two real frames either side rather than from the downscaled
+analysis, so it is exact. `layout_shift_score` is the share of the frame
+affected times how far it went — CLS-*shaped*, and not Chrome's Cumulative
+Layout Shift, which comes from the DOM and knows which elements are unstable.
+Use it to rank and threshold, not to report a Core Web Vital.
 
-**A move too large to measure is reported as a change, not a shift.** The
-displacement is found by registering one frame against the other, which needs
-most of the content still to be on screen afterwards. A move of more than about
-half the region it happened in — a page jumping a whole screen, a scroll —
-leaves too little overlap, and comes back as a `cut` or `busy` event with a
-large region instead. On a real recording that jump-scrolled 659px in two
-frames the honest answer is that it changed, not that it moved: **do not read
-"no shift" as "nothing moved"**. Look at the frames when a large region changes
-and nothing claims to have moved.
+An animated shift is found as well as an instant one, but one that runs for
+most of the recording is marked `continuous` — an animation rather than a
+layout settling — and `check` does not count those against a shift limit.
 
-An animated shift is found as well as an instant one — an accordion or anything
-with a CSS transition moves over several frames — but one that runs for most of
-the recording is marked `continuous` instead, because that is an animation
-rather than a layout settling.
-
-The tool cannot tell you *which element* moved or *why* — that needs the DOM.
+The tool cannot tell you *which element* moved or *why*; that needs the DOM.
 For a live page you control, `PerformanceObserver` with `layout-shift` entries
 is the better tool. This one is for when you have a recording and not the page.
 
-## Testing a recording
+## Event kinds at a glance
 
-```sh
-agent-motion check recording.mp4 --max-shift-score 0.05 --no-stall
-```
+`cut` `flash` `step` `blip` `flicker` `motion` `gradual` `busy` `stall`
+`shift` — defined in [interpreting results](references/interpreting.md#event-kinds).
 
-Turns the analysis into a pass or fail and exits non-zero on failure, so a
-visual regression can break a build rather than waiting to be noticed. Every
-threshold is opt-in — with none given it asserts nothing and says so, rather
-than implying it looked and approved. Each failed assertion names the event
-that broke it.
-
-`--max-shift-score`, `--max-shift-pixels`, `--no-shift`, `--no-stall`,
-`--no-flicker`, `--quiet`.
-
-Shifts marked `continuous` are not counted against a shift limit. A ticker
-sliding two pixels at a time is a real translation every time, and a gate that
-failed every page with a marquee is a gate nobody would leave switched on. The
-result says how many it ignored.
-
-If the recording is one the tool cannot judge — a scroll, a pan, ambient motion
-— the result says so in `notes`. A pass on footage like that means nothing, and
-it will tell you.
-
-## Did the page finish loading?
-
-Two fields, and the difference between them matters:
-
-- `settled_at_seconds` — when *anything* last changed.
-- `layout_settled_at_seconds` — when the *content* last changed, ignoring
-  whatever merely keeps animating.
-
-A ticker, a spinner or a video player keeps the first one late forever while the
-page itself has been stable for seconds. For "has this finished loading", read
-the second. Events with `continuous: true` are the ones doing that: activity
-running steadily in one small fixed place for much of the interval. That is a
-claim about shape, not meaning — the tool cannot tell a marquee from a stuck
-render, and says so.
-
-A `cut` also reports `uniform_shade_change`. True means the whole frame changed
-brightness together and the content underneath is unchanged — a modal backdrop
-or a dim, not a new screen. `shade_scale` near 0.5 means it was dimmed to half.
-A theme switch is *not* one of these: it moves background and text in opposite
-directions, so no single map fits and it correctly reads as content changing. Without this, the most dramatic-looking event in a recording is
-ambiguous and costs a round-trip through full-resolution frames to resolve.
-
-## Ask whether something is the same as it was
-
-```sh
-agent-motion compare recording.mp4 --at 14.9,18.5
-agent-motion compare recording.mp4 --at 6.13,6.23 \
-  --region 200,120,202,160 --pad 24 -o jitter.png
-```
-
-Every other command compares neighbouring frames. `compare` takes two arbitrary
-timestamps and gives an exact pixel count, which answers questions nothing else
-can: did the screen come back to the same state after that cut, did the region
-really revert, is anything at all different between these two moments. It
-distinguishes *identical* from *nothing above the threshold* — the second is
-what codec noise looks like.
-
-With `-o` it draws the difference: the later frame dimmed, with everything that
-differs lit up. For a change of a pixel or two, this is the only way to see it —
-two nearly identical stills cannot be compared by eye.
-
-## Narrow in
-
-Events give you a range; run again inside it with a lower threshold to see what
-was too small or too subtle the first time.
-
-```sh
-agent-motion timeline recording.mp4 --start 17 --end 19 --threshold 4
-```
-
-`--threshold` is the main dial. It is the per-pixel change, 0..255, that is
-ignored. The default 12 suppresses compression noise and also hides genuinely
-subtle rendering instability, so lowering it is the standard second move.
-
-## Event kinds
-
-| Kind | Means |
-|---|---|
-| `cut` | most of the frame changed at once and stayed changed |
-| `flash` | most of the frame changed for a frame or two, then returned |
-| `step` | brief localised change that is still there afterwards |
-| `blip` | brief localised change that reverted |
-| `flicker` | one area toggling repeatedly; `changes_per_second` is reported |
-| `motion` | activity whose centre travels; `direction` and `travel_pixels` reported. If it reverses once, `jump_backwards_pixels` marks where — usually the bug, when the movement itself is expected |
-| `gradual` | too slow to see between frames; found over the `--drift` window |
-| `busy` | sustained activity with no clearer shape |
-| `stall` | activity that was running continuously stopped, then resumed |
-| `shift` | the same content in a new place — it moved rather than appearing |
-
-Kinds describe the **shape** of a change, never its meaning. A `step` might be a
-button appearing, a tooltip closing, or a value updating — pull the frames.
-
-`stall` is the exception worth understanding: it is an *absence* of change, so
-no pixel shows it. It means something that had been animating continuously —
-a spinner, a caret, a polling indicator — stopped and then started again. On a
-"the page felt janky" report that is usually the answer.
-
-## The activity image
-
-```sh
-agent-motion project recording.mp4
-```
-
-Returns everything `timeline` returns and additionally writes a PNG where every
-pixel keeps its source `x,y`: red is how much it changed, green is when (black
-early, bright late), blue is how often. Black is no change above the threshold.
-
-It is an activity map, not a picture of the video, and it is not the whole
-story. Whole-frame cuts are left out so they cannot flatten everything else,
-`gradual` events barely register in it, and a `stall` cannot be drawn at all.
-Everything it omits is named in `omitted_from_image` and printed into the
-legend band. Read that before concluding nothing happened somewhere.
-
-Use `sheet` when you want to know what something looks like, and `project` when
-you want to know where on screen the action was.
-
-## If you cannot look at images
-
-`sheet`, `project`, `frames` and `compare -o` write PNGs, and this skill assumes
-you can open them. If you cannot, say so rather than guessing at their contents,
-and lean on the text instead: `timeline` describes every event, and `compare`
-answers questions about specific moments numerically — an exact changed-pixel
-count, the box those pixels fall in, and whether two frames are identical. That
-path is weaker, because nothing in it says *what* a region contains, but it is a
-real one and it is honest.
-
-## Limits worth stating back
-
-- No object recognition, no text reading, no explanation of cause.
-- Timestamps are frame-scale. At 30fps every one is accurate to about 33ms, and
-  seeking snaps to the nearest frame. Do not quote them more precisely, and
-  expect a run at a lower `--sample-fps` to move them.
-- Regions are bounding boxes of change, not object outlines.
-- Analysis is downscaled to `--analysis-width` (320 by default) unless you pass
-  `--native`; thin features can be missed.
-- A moving camera, a scrolling page, a slow zoom, or ambient motion — wind in
-  foliage, water, fire, a crowd, film grain — makes everything an event. The
-  tool detects this itself and says so in `suitability`; believe it, and switch
-  to `sheet` and `frames`.
-- On a still screen, a gap is just a gap. A `stall` is only reported when
-  something that *was* running continuously stopped, so a quiet stretch on an
-  otherwise static recording is not one.
+`stall` is the one worth knowing up front: it is an *absence* of change, so no
+pixel shows it. Something that had been animating continuously stopped and then
+resumed. On a "the page felt janky" report that is usually the answer.
 
 ## Output and errors
 
-One JSON object on stdout; `--format json|yaml|jsonl` overrides it. Failures are
-one JSON object on stderr with `fixable_by`: `agent` means fix the input or
-flags, `human` means install or grant something (FFmpeg must be on `PATH`, or
-pass `--ffmpeg` / `--ffprobe`), `retry` means try again.
+One JSON object on stdout; `--format json|yaml|jsonl` overrides it. `jsonl`
+renders a result's list one record per line with the rest as meta lines, so
+`timeline --format jsonl | grep '"kind":"shift"'` works without parsing.
 
-Full flag and field reference: [commands](references/commands.md) and
-[interpreting results](references/interpreting.md).
+Failures are one JSON object on stderr with `fixable_by`: `agent` means fix the
+input or flags, `human` means install or grant something (FFmpeg must be on
+`PATH`, or pass `--ffmpeg` / `--ffprobe`), `retry` means try again.
+
+## Going deeper
+
+- [commands](references/commands.md) — every command and every flag
+- [interpreting results](references/interpreting.md) — every output field, the
+  event-kind table, and the limits worth stating back
+- [recipes](references/recipes.md) — watching one event unfold, seeing
+  something small, whether the page finished loading, comparing two moments
+- [worked examples](references/worked-examples.md) — real measured output
+  beside what was actually happening, for the readings that are easy to get
+  backwards
+- [images](references/images.md) — `sheet` and `project`, and what to do
+  instead if you cannot open a PNG

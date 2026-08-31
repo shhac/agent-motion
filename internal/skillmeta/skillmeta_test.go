@@ -58,11 +58,76 @@ func TestSkillReferencesResolve(t *testing.T) {
 		t.Fatal("SKILL.md links to no reference files")
 	}
 	for _, link := range links {
-		path := filepath.Join(filepath.Dir(skill), string(link[1]))
-		if _, err := os.Stat(path); err != nil {
-			t.Errorf("SKILL.md links to %s, which does not exist", link[1])
+		target := string(link[1])
+		// A link may name a heading inside the file. Checking only the file
+		// would let a link rot silently the moment a section is renamed, which
+		// is the same failure this guard exists to prevent one level up.
+		file, anchor, hasAnchor := strings.Cut(target, "#")
+		path := filepath.Join(filepath.Dir(skill), file)
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("SKILL.md links to %s, which does not exist", target)
+			continue
+		}
+		if hasAnchor && !hasHeading(string(body), anchor) {
+			t.Errorf("SKILL.md links to %s, but %s has no heading anchored at #%s", target, file, anchor)
 		}
 	}
+}
+
+// TestEveryReferenceIsReachable guards the other direction. SKILL.md is loaded
+// every time the skill triggers; the reference files are loaded only when it
+// points at them. One that nothing links to is never read, which is the same
+// silent failure as a broken link and harder to notice.
+func TestEveryReferenceIsReachable(t *testing.T) {
+	const skill = "../../skills/agent-motion/SKILL.md"
+	data, err := os.ReadFile(skill)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked := map[string]bool{}
+	for _, link := range regexp.MustCompile(`\]\((references/[^)#]+)`).FindAllSubmatch(data, -1) {
+		linked[filepath.Base(string(link[1]))] = true
+	}
+	entries, err := os.ReadDir(filepath.Join(filepath.Dir(skill), "references"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		if !linked[entry.Name()] {
+			t.Errorf("references/%s is not linked from SKILL.md, so nothing will ever read it", entry.Name())
+		}
+	}
+}
+
+// hasHeading reports whether a Markdown body carries a heading whose GitHub
+// anchor is the one given.
+func hasHeading(body, anchor string) bool {
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(line, "#") {
+			continue
+		}
+		if headingAnchor(strings.TrimLeft(line, "# ")) == anchor {
+			return true
+		}
+	}
+	return false
+}
+
+func headingAnchor(heading string) string {
+	var out strings.Builder
+	for _, r := range strings.ToLower(heading) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+			out.WriteRune(r)
+		case r == ' ':
+			out.WriteRune('-')
+		}
+	}
+	return out.String()
 }
 
 func parseFrontmatter(frontmatter string) map[string]string {
