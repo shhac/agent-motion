@@ -21,8 +21,11 @@ formula bump.**
    - Tests, vet, and lint pass (e.g. `make test` / `go test ./...`, `go vet ./...`,
      `make lint` / `golangci-lint run ./...`). The version is injected from the tag
      (`-ldflags -X main.version=…`) — there is no version file to edit.
-   - Optionally run `make test-integration` (needs docker) for release-critical
-     changes to query/mongo code.
+   - The test suite must pass with **no FFmpeg installed and no media on disk** —
+     that is a project invariant, not a convenience. `make fixtures` needs
+     FFmpeg and is not part of the release path.
+   - Check the skill still guards clean (`go test ./internal/skillmeta/...`): a
+     malformed skill fails silently, so the tool is simply never used.
 3. Compute the new version by bumping the latest tag
    (`git describe --tags --abbrev=0`): patch → x.y.(z+1), minor → x.(y+1).0,
    major → (x+1).0.0.
