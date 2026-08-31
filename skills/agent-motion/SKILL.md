@@ -1,13 +1,14 @@
 ---
 name: agent-motion
 description: |
-  Find out what happens in a video over time without watching it. Use when:
-  - Debugging a screen recording, UI capture, browser session, or visual test
-  - Locating when something appeared, moved, flickered, flashed, or faded
-  - Finding the timestamp of a glitch, a rendering artefact, or a layout jump
-  - Deciding which frames of a video are worth looking at, before looking
-  - Summarising a recording you cannot afford to sample frame by frame
-  Triggers: "video", "screen recording", "screencast", "mp4", "mov", "webm", "what happens in this video", "when does", "find the glitch", "flicker", "flashing", "visual regression", "ui recording", "capture", "frame", "timestamp of", "contact sheet", "extract frames", "motion", "agent-motion", "temporal"
+  Find out what happens in a video over time without watching it: a timeline
+  of events with timestamps and regions, where on screen the action was,
+  captioned contact sheets, single frames, and pixel-exact comparison of two
+  moments. Use when debugging a screen recording, UI capture, or visual
+  test, locating when something appeared, moved, flickered, or faded,
+  finding the timestamp of a glitch or layout jump, or choosing which frames
+  are worth looking at. Built for fixed-viewport recordings, not a panning
+  camera. Triggers: mp4, mov, webm, screencast, visual regression.
 allowed-tools: Bash(agent-motion *) Read Grep Glob
 ---
 
