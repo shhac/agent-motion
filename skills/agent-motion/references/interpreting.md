@@ -13,6 +13,8 @@
 | `layout_settled_at_seconds` | When the last change to the *content* finished, ignoring anything that merely keeps animating. This is the one that answers "has this finished loading" — a ticker or a spinner keeps `settled_at_seconds` late while the page itself has been stable for seconds. |
 | `activity_sparkline` | Shape of frame-to-frame activity, one character per bucket. Least to most active: `_ . : - = + * #`. `gradual` events do not appear in it. |
 | `activity_sparkline_full_scale` | The value a `#` represents. The ramp is square-root scaled, so it is orientation, not measurement. |
+| `bucket_seconds` | How much time one sparkline character covers. |
+| `activity_by_bucket` | The numbers behind the sparkline, one per character, present only with `--series`. Use it when you need the shape as data rather than as a picture. |
 | `motion_coverage` | Fraction of pixels that changed at least once. |
 | `timestamps_worth_inspecting` | Frames that would show the events found. |
 | `next_steps` | Commands you can run verbatim. |
@@ -30,12 +32,13 @@
 | `position` | The third of the frame it sits in, e.g. `bottom right`. |
 | `persists` | Whether the region still looks different afterwards. Absent when it could not be compared. |
 | `continuous` | Set when activity runs steadily in one small fixed place for much of the interval, or when a `shift` is one step of movement already running there — the shape of animation rather than a fault. A claim about shape only: the tool cannot tell a marquee from a stuck render. `check` does not count continuous shifts against a layout-shift limit. |
-| `moved_by_pixels` | Set on a `shift`: how far the content moved, in source pixels, positive Y down. Measured from the real frames either side, so it is exact regardless of `--analysis-width`. |
+| `moved_by_pixels` | Set on a `shift`: how far the content moved, in source pixels, positive Y down. Measured from the real frames either side, so it is exact regardless of `--analysis-width`. A move of more than about half its region leaves too little overlap to register and is reported as a change instead, so no `shift` is not evidence that nothing moved. |
 | `layout_shift_score` | Share of the frame affected times how far it moved. CLS-shaped, not Chrome's CLS. Use it to rank and threshold. |
 | `direction`, `travel_pixels` | Set when the active centre moves. |
 | `jump_backwards_pixels`, `jump_backwards_seconds` | Set when the movement reverses once — a progress bar regressing, a scroll resetting, a carousel snapping back. The movement is usually expected; the jump is usually the bug. |
 | `changes_per_second` | Set for `flicker`. Counts changes, so a full on-off cycle is two. |
 | `peak_changed_fraction` | Largest share of the frame changing in one step. |
+| `mean_changed_fraction` | Average share changing per step across the event. Far below the peak means one moment did most of it; close to it means a steady stretch. |
 | `peak_drift_fraction` | Largest change across the `--drift` window. For `gradual` events this is the only non-zero measure. |
 | `summary` | The same thing in a sentence. |
 
@@ -68,12 +71,18 @@ as moving, or the region was too small or too featureless to register against.
 A `cut` covers the whole frame, and two very different things look identical in
 the numbers: the screen was replaced, or something translucent was put over it.
 `uniform_shade_change` tells them apart by testing whether every pixel moved
-through the same brightness map — which an overlay, a dim and a theme switch all
-do, and new content does not.
+through the same brightness map — which something translucent laid over
+unchanged content does, and new content does not.
+
+A theme switch is *not* one of these, though it looks like it should be. Dark to
+light moves the background up and the text down, and no single map fits both
+directions, so a theme change correctly reads as the content changing rather
+than as an overlay. Measured on a real dark-to-light toggle: 88% of the frame
+followed a map, below the bar, and the verdict was content.
 
 | Field | Means |
 |---|---|
-| `uniform_shade_change: true` | The picture underneath is unchanged. A modal backdrop, a dim, a theme switch. |
+| `uniform_shade_change: true` | The picture underneath is unchanged, only its brightness. A modal backdrop or a dim. Absent or false does not mean "no overlay" — a menu that opens without dimming the page behind it is new content, and reads as one. |
 | `shade_scale` | The brightness multiplier. About 0.5 means dimmed to half — the signature of a modal backdrop. |
 | `shade_fit` | The share of the frame that followed that map. A modal dims most of the frame and puts a dialog on the rest, so this says more than an average could: 0.85 means 85% dimmed and 15% is new content on top. |
 

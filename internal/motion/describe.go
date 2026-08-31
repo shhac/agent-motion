@@ -299,7 +299,7 @@ func shading(e Event) string {
 			rest = fmt.Sprintf(" The remaining %.0f%% is new content on top of it, which is what a dialog over a dimmed page looks like.",
 				(1-e.ShadeFit)*100)
 		}
-		return fmt.Sprintf(" %.0f%% of the frame moved through the same brightness map, scaled to %.0f%%, so what is underneath is unchanged — an overlay, a dim, or a theme switch rather than a new screen.%s",
+		return fmt.Sprintf(" %.0f%% of the frame moved through the same brightness map, scaled to %.0f%%, so what is underneath is unchanged — something translucent laid over it rather than a new screen.%s",
 			e.ShadeFit*100, e.ShadeScale*100, rest)
 	}
 	return fmt.Sprintf(" Only %.0f%% of it follows a single brightness map, so the content itself changed rather than just its brightness.", e.ShadeFit*100)

@@ -50,8 +50,12 @@ type Event struct {
 	// Layout Shift, which is measured from the DOM over a session window.
 	ShiftScore float64 `json:"layout_shift_score,omitempty"`
 	// Uniform marks a whole-frame change where every pixel moved through the
-	// same brightness map — an overlay, a dim, or a theme switch — rather than
-	// the content changing. The picture underneath is still the same picture.
+	// same brightness map — an overlay or a dim — rather than the content
+	// changing. The picture underneath is still the same picture.
+	//
+	// A theme switch is not one of these, though it looks like it should be:
+	// it moves background and text in opposite directions, which no single map
+	// fits, so it reads as content changing. That is the right answer.
 	Uniform bool `json:"uniform_shade_change,omitempty"`
 	// ShadeResidual is how far the frame strayed from that uniform map, in
 	// luminance units. Small means an overlay; large means new content.

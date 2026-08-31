@@ -153,6 +153,21 @@ Chrome's Cumulative Layout Shift, which comes from the DOM, covers a session
 window, and knows which elements are unstable. Use it to rank and to threshold,
 not to report a Core Web Vital.
 
+**A move too large to measure is reported as a change, not a shift.** The
+displacement is found by registering one frame against the other, which needs
+most of the content still to be on screen afterwards. A move of more than about
+half the region it happened in — a page jumping a whole screen, a scroll —
+leaves too little overlap, and comes back as a `cut` or `busy` event with a
+large region instead. On a real recording that jump-scrolled 659px in two
+frames the honest answer is that it changed, not that it moved: **do not read
+"no shift" as "nothing moved"**. Look at the frames when a large region changes
+and nothing claims to have moved.
+
+An animated shift is found as well as an instant one — an accordion or anything
+with a CSS transition moves over several frames — but one that runs for most of
+the recording is marked `continuous` instead, because that is an animation
+rather than a layout settling.
+
 The tool cannot tell you *which element* moved or *why* — that needs the DOM.
 For a live page you control, `PerformanceObserver` with `layout-shift` entries
 is the better tool. This one is for when you have a recording and not the page.
@@ -198,8 +213,9 @@ render, and says so.
 
 A `cut` also reports `uniform_shade_change`. True means the whole frame changed
 brightness together and the content underneath is unchanged — a modal backdrop
-or a theme switch, not a new screen. `shade_scale` near 0.5 means it was dimmed
-to half. Without this, the most dramatic-looking event in a recording is
+or a dim, not a new screen. `shade_scale` near 0.5 means it was dimmed to half.
+A theme switch is *not* one of these: it moves background and text in opposite
+directions, so no single map fits and it correctly reads as content changing. Without this, the most dramatic-looking event in a recording is
 ambiguous and costs a round-trip through full-resolution frames to resolve.
 
 ## Ask whether something is the same as it was

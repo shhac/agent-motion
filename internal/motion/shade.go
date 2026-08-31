@@ -47,10 +47,14 @@ const shadeSamples = 20000
 // translucent scrim as a light-to-dark theme flip and only caught it by pulling
 // native frames by hand.
 //
-// An overlay, a dim, and a theme switch all map every pixel through roughly the
-// same function, so the after-frame is a straight line in the before-frame. New
-// content is not. Fitting that line and measuring what is left over separates
-// them for the cost of a few thousand samples.
+// Something translucent laid over the frame maps every pixel through roughly
+// the same function, so the after-frame is a straight line in the before-frame.
+// New content is not. Fitting that line and measuring how much of the frame
+// follows it separates them for the cost of a few thousand samples.
+//
+// A theme switch deliberately fails this. Dark to light moves the background up
+// and the text down, and no single line fits both directions, so it is reported
+// as the content changing — which is what it is.
 func uniformShade(before, after image.Image, region image.Rectangle) (fit, scale float64, uniform bool) {
 	region = region.Intersect(before.Bounds()).Intersect(after.Bounds())
 	if region.Dx() < 8 || region.Dy() < 8 {

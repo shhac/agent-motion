@@ -123,9 +123,10 @@ DID IT FINISH?
   the interval — the shape of animation, not of a fault.
 
   A cut also reports uniform_shade_change. True means the whole frame changed
-  brightness together and the content underneath is unchanged: an overlay, a
-  dim or a theme switch, not a new screen. shade_scale near 0.5 means dimmed
-  to half.
+  brightness together and the content underneath is unchanged: an overlay or
+  a dim, not a new screen. shade_scale near 0.5 means dimmed to half. A theme
+  switch is not one of these — it moves background and text in opposite
+  directions, so it reads as the content changing, which is correct.
 
 SUITABILITY
   Every analysis reports 'suitability'. When the verdict is not "suitable",
