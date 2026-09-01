@@ -39,18 +39,22 @@ mostly text, at a fraction of the cost of the frames it summarises.
 
 ## Install
 
+Decoding is local FFmpeg, so `ffmpeg` and `ffprobe` need to be on `PATH`
+whichever way you install `agent-motion` below. How you get them is your
+choice — `brew install ffmpeg`, your distribution's package, or a static
+build — and if they live somewhere off `PATH`, pass `--ffmpeg` / `--ffprobe`.
+
+Then take the binary:
+
 ```sh
 brew install shhac/tap/agent-motion
 ```
 
-Or build it:
+Or build it, which additionally needs Go 1.26+:
 
 ```sh
 make build
 ```
-
-Requires Go 1.26+ and `ffmpeg` / `ffprobe` on `PATH` (or pass `--ffmpeg` /
-`--ffprobe`).
 
 ## Commands
 

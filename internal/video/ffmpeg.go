@@ -28,13 +28,19 @@ func NewFFmpeg(ffmpegPath, ffprobePath string) *FFmpeg {
 
 // Available reports a structured error when either executable is missing.
 func (f *FFmpeg) Available() error {
-	for _, dep := range []struct{ name, path string }{
-		{"ffmpeg", f.FFmpegPath}, {"ffprobe", f.FFprobePath},
-	} {
-		if _, err := exec.LookPath(dep.path); err != nil {
-			return output.New(fmt.Sprintf("%s executable %q was not found", dep.name, dep.path), output.FixableByHuman).
-				WithHint("install FFmpeg (macOS: brew install ffmpeg) or pass --" + dep.name + " /path/to/" + dep.name)
-		}
+	if err := requires("ffmpeg", f.FFmpegPath); err != nil {
+		return err
+	}
+	return requires("ffprobe", f.FFprobePath)
+}
+
+// requires reports a structured error when one executable is not on PATH.
+// Every entry point guards the executable it actually runs, so a missing
+// dependency is named as itself whatever order the calls arrive in.
+func requires(name, path string) error {
+	if _, err := exec.LookPath(path); err != nil {
+		return output.New(fmt.Sprintf("%s executable %q was not found", name, path), output.FixableByHuman).
+			WithHint("install FFmpeg (macOS: brew install ffmpeg) or pass --" + name + " /path/to/" + name)
 	}
 	return nil
 }
@@ -135,6 +141,9 @@ func infoFrom(response probeResponse) (Info, error) {
 // Decode streams rgb24 frames for the requested interval. Frame.Pix is reused
 // between callbacks.
 func (f *FFmpeg) Decode(ctx context.Context, req Request, fn func(Frame) error) error {
+	if err := requires("ffmpeg", f.FFmpegPath); err != nil {
+		return err
+	}
 	if req.Width <= 0 || req.Height <= 0 || req.FPS <= 0 {
 		return output.New("decode request needs explicit frame dimensions and rate", output.FixableByRetry)
 	}
@@ -222,6 +231,9 @@ func filters(req Request) string {
 
 // Still decodes a single frame and returns it as PNG bytes.
 func (f *FFmpeg) Still(ctx context.Context, path string, still Still) ([]byte, error) {
+	if err := requires("ffmpeg", f.FFmpegPath); err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, f.FFmpegPath, stillArgs(path, still)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

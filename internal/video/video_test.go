@@ -1,10 +1,15 @@
 package video
 
 import (
+	"context"
+	"errors"
 	"image"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	output "github.com/shhac/lib-agent-output"
 )
 
 func TestRatioReadsFFprobeFrameRates(t *testing.T) {
@@ -56,11 +61,59 @@ func TestFiltersPinRateAndSize(t *testing.T) {
 
 func TestAvailableReportsMissingExecutablesAsHumanFixable(t *testing.T) {
 	err := NewFFmpeg("definitely-not-a-real-ffmpeg", "ffprobe").Available()
+	assertMissingExecutable(t, err, "definitely-not-a-real-ffmpeg", "--ffmpeg")
+}
+
+// TestEntryPointsGuardTheExecutableTheyRun pins that every entry point checks
+// its own dependency rather than relying on a Probe having gone first. A
+// caller that reorders the calls, or uses one alone, still gets the actionable
+// error instead of a raw exec failure marked as retryable.
+func TestEntryPointsGuardTheExecutableTheyRun(t *testing.T) {
+	const missing = "definitely-not-a-real-ffmpeg"
+	decoder := NewFFmpeg(missing, missing)
+	ctx := context.Background()
+
+	t.Run("decode", func(t *testing.T) {
+		err := decoder.Decode(ctx, Request{Path: "clip.mp4", Width: 320, Height: 180, FPS: 25}, func(Frame) error {
+			t.Fatal("no frame should be decoded without FFmpeg")
+			return nil
+		})
+		assertMissingExecutable(t, err, missing, "--ffmpeg")
+	})
+
+	t.Run("decode reports the dependency before the request shape", func(t *testing.T) {
+		err := decoder.Decode(ctx, Request{Path: "clip.mp4"}, func(Frame) error { return nil })
+		assertMissingExecutable(t, err, missing, "--ffmpeg")
+	})
+
+	t.Run("still", func(t *testing.T) {
+		_, err := decoder.Still(ctx, "clip.mp4", Still{At: 1})
+		assertMissingExecutable(t, err, missing, "--ffmpeg")
+	})
+
+	t.Run("probe", func(t *testing.T) {
+		_, err := decoder.Probe(ctx, "clip.mp4")
+		assertMissingExecutable(t, err, missing, "--ffmpeg")
+	})
+}
+
+func assertMissingExecutable(t *testing.T, err error, name, flag string) {
+	t.Helper()
 	if err == nil {
 		t.Fatal("expected an error for a missing executable")
 	}
-	if got := err.Error(); got == "" {
-		t.Error("error should name the missing executable")
+	var structured *output.Error
+	if !errors.As(err, &structured) {
+		t.Fatalf("error is not structured: %v", err)
+	}
+	if structured.FixableBy != output.FixableByHuman {
+		t.Errorf("fixable_by = %v, want %v", structured.FixableBy, output.FixableByHuman)
+	}
+	if !strings.Contains(structured.Error(), name) {
+		t.Errorf("error should name the missing executable, got %q", structured.Error())
+	}
+	if !strings.Contains(structured.Hint, flag) {
+		t.Errorf("hint should offer %s, got %q", flag, structured.Hint)
 	}
 }
 
